@@ -1,55 +1,139 @@
-'use server';
-
 import { NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
-import { createServerClient } from '@supabase/ssr';
+import { requireAuth } from '@/lib/api-auth';
+import {
+  createAvailability as createLocalAvailability,
+  deleteAvailabilities as deleteLocalAvailabilities,
+  isSchemaCacheError,
+  listAvailabilities
+} from '@/lib/local-store';
+
+type ScopeType = 'group' | 'event';
+
+function isScopeType(value: string): value is ScopeType {
+  return value === 'group' || value === 'event';
+}
+
+export async function GET(request: Request) {
+  const auth = await requireAuth(request);
+  if ('error' in auth) return auth.error;
+
+  const url = new URL(request.url);
+  const scopeType = String(url.searchParams.get('scope_type') ?? '');
+  const scopeId = String(url.searchParams.get('scope_id') ?? '');
+  const memberName = String(url.searchParams.get('member_name') ?? '').trim();
+
+  if (!isScopeType(scopeType) || !scopeId) {
+    return NextResponse.json({ error: 'missing_scope' }, { status: 400 });
+  }
+
+  const { supabase } = auth;
+  let query = supabase
+    .from('availabilities')
+    .select('*')
+    .eq('scope_type', scopeType)
+    .eq('scope_id', scopeId)
+    .order('start_ts', { ascending: true });
+
+  if (memberName) {
+    query = query.eq('member_name', memberName);
+  }
+
+  const { data, error } = await query;
+  if (error) {
+    if (isSchemaCacheError(error)) {
+      const localData = await listAvailabilities(scopeType, scopeId, memberName || undefined);
+      return NextResponse.json({ data: localData });
+    }
+
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ data: data ?? [] });
+}
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const { group_id, start_ts, end_ts, note } = body;
+    const auth = await requireAuth(request);
+    if ('error' in auth) return auth.error;
 
-    if (!group_id || !start_ts || !end_ts) {
+    const body = await request.json();
+    const scopeType = String(body.scope_type ?? '');
+    const scopeId = String(body.scope_id ?? '');
+    const memberName = auth.email;
+    const startTs = String(body.start_ts ?? '');
+    const endTs = String(body.end_ts ?? '');
+    const note = String(body.note ?? '').trim() || null;
+
+    if (!isScopeType(scopeType) || !scopeId || !memberName || !startTs || !endTs) {
       return NextResponse.json({ error: 'missing_fields' }, { status: 400 });
     }
 
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL ?? '',
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? '',
-      {
-        cookies: {
-          getAll() {
-            return cookies().getAll();
-          },
-          setAll() {
-            // no-op in this context
-          }
-        }
+    if (new Date(endTs) <= new Date(startTs)) {
+      return NextResponse.json({ error: 'invalid_range' }, { status: 400 });
+    }
+
+    const { supabase } = auth;
+    const { data, error } = await supabase
+      .from('availabilities')
+      .insert({
+        scope_type: scopeType,
+        scope_id: scopeId,
+        member_name: memberName,
+        start_ts: startTs,
+        end_ts: endTs,
+        note
+      })
+      .select('*')
+      .single();
+
+    if (error || !data) {
+      if (error && isSchemaCacheError(error)) {
+        const localAvailability = await createLocalAvailability({
+          scope_type: scopeType,
+          scope_id: scopeId,
+          member_name: memberName,
+          start_ts: startTs,
+          end_ts: endTs,
+          note
+        });
+        return NextResponse.json({ data: localAvailability }, { status: 201 });
       }
-    );
 
-    const {
-      data: { user }
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
+      return NextResponse.json({ error: error?.message ?? 'availability_create_failed' }, { status: 500 });
     }
 
-    const insert = await supabase.from('availabilities').insert({
-      user_id: user.id,
-      group_id,
-      start_ts,
-      end_ts,
-      note
-    });
+    return NextResponse.json({ data }, { status: 201 });
+  } catch (error) {
+    return NextResponse.json({ error: 'server_error', details: String(error) }, { status: 500 });
+  }
+}
 
-    if (insert.error) {
-      return NextResponse.json({ error: insert.error.message }, { status: 500 });
+export async function DELETE(request: Request) {
+  try {
+    const auth = await requireAuth(request);
+    if ('error' in auth) return auth.error;
+
+    const body = await request.json();
+    const ids = Array.isArray(body.ids) ? body.ids.map((id: unknown) => String(id)).filter(Boolean) : [];
+
+    if (ids.length === 0) {
+      return NextResponse.json({ error: 'missing_ids' }, { status: 400 });
     }
 
-    return NextResponse.json({ ok: true, record: insert.data?.[0] ?? null }, { status: 201 });
-  } catch (err) {
-    return NextResponse.json({ error: 'server_error', details: String(err) }, { status: 500 });
+    const { supabase } = auth;
+    const { data, error } = await supabase.from('availabilities').delete().eq('member_name', auth.email).in('id', ids).select('*');
+
+    if (error) {
+      if (isSchemaCacheError(error)) {
+        const deleted = await deleteLocalAvailabilities(ids, auth.email);
+        return NextResponse.json({ data: deleted });
+      }
+
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ data: data ?? [] });
+  } catch (error) {
+    return NextResponse.json({ error: 'server_error', details: String(error) }, { status: 500 });
   }
 }

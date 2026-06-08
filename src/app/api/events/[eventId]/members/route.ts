@@ -1,25 +1,25 @@
 import { NextResponse } from 'next/server';
 
 import { requireAuth } from '@/lib/api-auth';
-import { addGroupMember, isSchemaCacheError, listGroupMembers } from '@/lib/local-store';
+import { addEventMember, isSchemaCacheError, listEventMembers } from '@/lib/local-store';
+
+type RouteContext = { params: Promise<{ eventId: string }> };
 
 function cleanName(value: unknown) {
   return String(value ?? '').trim();
 }
 
-type RouteContext = { params: Promise<{ groupId: string }> };
-
 export async function GET(request: Request, { params }: RouteContext) {
   const auth = await requireAuth(request);
   if ('error' in auth) return auth.error;
 
-  const { groupId } = await params;
+  const { eventId } = await params;
   const { supabase } = auth;
-  const { data, error } = await supabase.from('group_members').select('*').eq('group_id', groupId).order('created_at', { ascending: true });
+  const { data, error } = await supabase.from('event_members').select('*').eq('event_id', eventId).order('created_at', { ascending: true });
 
   if (error) {
     if (isSchemaCacheError(error)) {
-      return NextResponse.json({ data: await listGroupMembers(groupId) });
+      return NextResponse.json({ data: await listEventMembers(eventId) });
     }
 
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -33,7 +33,7 @@ export async function POST(request: Request, { params }: RouteContext) {
     const auth = await requireAuth(request);
     if ('error' in auth) return auth.error;
 
-    const { groupId } = await params;
+    const { eventId } = await params;
     const body = await request.json();
     const memberName = cleanName(body.member_name);
 
@@ -43,14 +43,14 @@ export async function POST(request: Request, { params }: RouteContext) {
 
     const { supabase } = auth;
     const { data, error } = await supabase
-      .from('group_members')
-      .upsert({ group_id: groupId, member_name: memberName }, { onConflict: 'group_id,member_name' })
+      .from('event_members')
+      .upsert({ event_id: eventId, member_name: memberName }, { onConflict: 'event_id,member_name' })
       .select('*')
       .single();
 
     if (error || !data) {
       if (error && isSchemaCacheError(error)) {
-        const localMember = await addGroupMember(groupId, memberName);
+        const localMember = await addEventMember(eventId, memberName);
         return NextResponse.json({ data: localMember }, { status: 201 });
       }
 

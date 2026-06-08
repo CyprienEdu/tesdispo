@@ -1,36 +1,73 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# TesDispo
 
-## Getting Started
+TesDispo est une app pour organiser des sorties, des week-ends et des vacances entre amis.
 
-First, run the development server:
+La logique produit est simple:
+- une landing page quand on n est pas connecte,
+- une page compte pour creer un compte ou se connecter,
+- une page A venir pour suivre les evenements deja dates,
+- une page Groupes pour organiser les cercles d amis,
+- une page Evenements pour piloter les evenements ponctuels,
+- une page evenement avec un calendrier de disponibilites.
+
+## Ce que fait l app
+
+- Creer des groupes petits ou larges.
+- Inviter des membres dans un groupe.
+- Creer des evenements ponctuels depuis un groupe.
+- Marquer des indisponibilites dans un calendrier mensuel par defaut.
+- Naviguer en vue mois, semaine ou annee.
+- Cliquer ou glisser sur le calendrier pour bloquer un jour ou une plage.
+- Valider une date d evenement quand le groupe trouve un bon créneau.
+- Faire remonter les evenements a venir dans une vue dediee.
+
+## Parcours utilisateur
+
+1. On arrive sur la landing page.
+2. On clique sur le bouton compte dans la navbar.
+3. On se connecte ou on cree un compte.
+4. Une fois connecte, on atterrit sur la page A venir.
+5. Depuis la navbar, on navigue vers Groupes, Evenements ou A venir.
+6. Dans un groupe, on voit les evenements et on peut en creer un nouveau.
+7. Dans un evenement, on ouvre le calendrier, on ajoute les indispos et on fixe une date.
+
+## Principes de calendrier
+
+- La vue mensuelle est la vue par defaut.
+- Les jours passes sont grises et non selectionnables.
+- On peut cliquer un jour pour le bloquer.
+- On peut aussi cliquer-glisser pour bloquer une plage.
+- La vue semaine et la vue annee restent disponibles pour le tri et la navigation.
+- Les evenements dates et non passes remontent automatiquement dans A venir.
+
+## Setup local
+
+1. Installer les dependances:
+
+```bash
+npm install --legacy-peer-deps
+```
+
+2. Creer `.env.local`:
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=...
+NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+```
+
+3. Initialiser la base avec `db/init.sql` dans Supabase SQL Editor.
+
+4. Lancer l app:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Puis ouvrir `http://localhost:3000`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Notes techniques
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Les groupes et les evenements sont stockes dans Supabase.
+- `resolved_at` sert de date validee pour un evenement.
+- `archived_at` permet de sortir un evenement du flux visible si besoin.
+- Le calendrier s appuie sur les indisponibilites sauvegardees en base.

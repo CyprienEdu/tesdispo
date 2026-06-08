@@ -1,38 +1,50 @@
 import { NextResponse } from 'next/server';
 
-import { createSupabaseClient, hasSupabaseConfig } from '@/lib/supabase';
+import { requireAuth } from '@/lib/api-auth';
+import { deleteGroup, getGroupSummary, isSchemaCacheError, updateGroup } from '@/lib/local-store';
 
-export async function GET(_: Request, { params }: { params: { groupId: string } }) {
-  if (!hasSupabaseConfig()) {
-    return NextResponse.json({ error: 'missing_supabase_config' }, { status: 500 });
-  }
+type RouteContext = { params: Promise<{ groupId: string }> };
 
-  const supabase = createSupabaseClient();
+export async function GET(request: Request, { params }: RouteContext) {
+  const auth = await requireAuth(request);
+  if ('error' in auth) return auth.error;
+
+  const { groupId } = await params;
+  const { supabase } = auth;
   const [groupRes, membersRes, eventsRes] = await Promise.all([
-    supabase.from('groups').select('*').eq('id', params.groupId).single(),
-    supabase.from('group_members').select('*').eq('group_id', params.groupId).order('created_at', { ascending: true }),
-    supabase.from('events').select('*').eq('group_id', params.groupId).order('created_at', { ascending: false })
+    supabase.from('groups').select('*').eq('id', groupId).single(),
+    supabase.from('group_members').select('*').eq('group_id', groupId).order('created_at', { ascending: true }),
+    supabase.from('events').select('*').eq('group_id', groupId).order('created_at', { ascending: false })
   ]);
 
   if (groupRes.error || !groupRes.data) {
+    if (groupRes.error && isSchemaCacheError(groupRes.error)) {
+      const localSummary = await getGroupSummary(groupId);
+      if (!localSummary) {
+        return NextResponse.json({ error: 'group_not_found' }, { status: 404 });
+      }
+
+      return NextResponse.json({ data: localSummary });
+    }
+
     return NextResponse.json({ error: groupRes.error?.message ?? 'group_not_found' }, { status: 404 });
   }
 
   return NextResponse.json({
     data: {
       group: groupRes.data,
-      members: membersRes.data ?? [],
-      events: eventsRes.data ?? []
+      members: membersRes.error && isSchemaCacheError(membersRes.error) ? [] : membersRes.data ?? [],
+      events: eventsRes.error && isSchemaCacheError(eventsRes.error) ? [] : eventsRes.data ?? []
     }
   });
 }
 
-export async function PATCH(request: Request, { params }: { params: { groupId: string } }) {
+export async function PATCH(request: Request, { params }: RouteContext) {
   try {
-    if (!hasSupabaseConfig()) {
-      return NextResponse.json({ error: 'missing_supabase_config' }, { status: 500 });
-    }
+    const auth = await requireAuth(request);
+    if ('error' in auth) return auth.error;
 
+    const { groupId } = await params;
     const body = await request.json();
     const name = String(body.name ?? '').trim();
 
@@ -40,10 +52,19 @@ export async function PATCH(request: Request, { params }: { params: { groupId: s
       return NextResponse.json({ error: 'missing_fields' }, { status: 400 });
     }
 
-    const supabase = createSupabaseClient();
-    const { data, error } = await supabase.from('groups').update({ name }).eq('id', params.groupId).select('*').single();
+    const { supabase } = auth;
+    const { data, error } = await supabase.from('groups').update({ name }).eq('id', groupId).select('*').single();
 
     if (error || !data) {
+      if (error && isSchemaCacheError(error)) {
+        const localGroup = await updateGroup(groupId, name);
+        if (!localGroup) {
+          return NextResponse.json({ error: 'group_not_found' }, { status: 404 });
+        }
+
+        return NextResponse.json({ data: localGroup });
+      }
+
       return NextResponse.json({ error: error?.message ?? 'group_update_failed' }, { status: 500 });
     }
 
@@ -53,15 +74,20 @@ export async function PATCH(request: Request, { params }: { params: { groupId: s
   }
 }
 
-export async function DELETE(_: Request, { params }: { params: { groupId: string } }) {
-  if (!hasSupabaseConfig()) {
-    return NextResponse.json({ error: 'missing_supabase_config' }, { status: 500 });
-  }
+export async function DELETE(request: Request, { params }: RouteContext) {
+  const auth = await requireAuth(request);
+  if ('error' in auth) return auth.error;
 
-  const supabase = createSupabaseClient();
-  const { error } = await supabase.from('groups').delete().eq('id', params.groupId);
+  const { groupId } = await params;
+  const { supabase } = auth;
+  const { error } = await supabase.from('groups').delete().eq('id', groupId);
 
   if (error) {
+    if (isSchemaCacheError(error)) {
+      await deleteGroup(groupId);
+      return NextResponse.json({ ok: true });
+    }
+
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 

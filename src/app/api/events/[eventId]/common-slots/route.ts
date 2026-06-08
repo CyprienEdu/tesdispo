@@ -1,30 +1,31 @@
 import { NextResponse } from 'next/server';
+
 import { requireAuth } from '@/lib/api-auth';
 import { buildAvailabilityPeriods, buildPeriodWindows, filterCommonSlots, generateTimeSlots, type PeriodView, type Unavailability } from '@/lib/freetime';
-import { isSchemaCacheError, listAvailabilities, listGroupMembers } from '@/lib/local-store';
+import { isSchemaCacheError, listAvailabilities, listEventMembers } from '@/lib/local-store';
 
 function isPeriodView(value: string): value is PeriodView {
   return value === 'day' || value === 'week' || value === 'month';
 }
 
-type RouteContext = { params: Promise<{ groupId: string }> };
+type RouteContext = { params: Promise<{ eventId: string }> };
 
 export async function GET(request: Request, { params }: RouteContext) {
   try {
     const auth = await requireAuth(request);
     if ('error' in auth) return auth.error;
 
-    const { groupId } = await params;
+    const { eventId } = await params;
     const url = new URL(request.url);
     const viewParam = String(url.searchParams.get('view') ?? 'week');
     const view: PeriodView = isPeriodView(viewParam) ? viewParam : 'week';
     const count = Number(url.searchParams.get('count') ?? (view === 'day' ? '14' : view === 'week' ? '8' : '6')) || (view === 'day' ? 14 : view === 'week' ? 8 : 6);
 
     const { supabase } = auth;
-    const membersRes = await supabase.from('group_members').select('member_name').eq('group_id', groupId);
+    const membersRes = await supabase.from('event_members').select('member_name').eq('event_id', eventId);
     if (membersRes.error) {
       if (isSchemaCacheError(membersRes.error)) {
-        const members = (await listGroupMembers(groupId)).map((row) => row.member_name).filter(Boolean);
+        const members = (await listEventMembers(eventId)).map((row) => row.member_name).filter(Boolean);
         if (members.length === 0) {
           return NextResponse.json({ slots: [], periods: [], summary: { fully_free_periods: 0, total_periods: 0 } });
         }
@@ -33,7 +34,7 @@ export async function GET(request: Request, { params }: RouteContext) {
         startWindow.setHours(0, 0, 0, 0);
         const periodWindows = buildPeriodWindows(startWindow, view, count);
         const endWindow = new Date(periodWindows[periodWindows.length - 1]?.end ?? startWindow.toISOString());
-        const avRows = (await listAvailabilities('group', groupId)).filter((row) => members.includes(row.member_name) && row.start_ts < endWindow.toISOString() && row.end_ts > startWindow.toISOString());
+        const avRows = (await listAvailabilities('event', eventId)).filter((row) => members.includes(row.member_name) && row.start_ts < endWindow.toISOString() && row.end_ts > startWindow.toISOString());
         const perMember: Unavailability[] = members.map((memberName) => ({ member_name: memberName, ranges: [] }));
 
         for (const row of avRows) {
@@ -70,15 +71,15 @@ export async function GET(request: Request, { params }: RouteContext) {
     const avRes = await supabase
       .from('availabilities')
       .select('member_name,start_ts,end_ts')
-      .eq('scope_type', 'group')
-      .eq('scope_id', groupId)
+      .eq('scope_type', 'event')
+      .eq('scope_id', eventId)
       .in('member_name', members)
       .lt('start_ts', endWindow.toISOString())
       .gt('end_ts', startWindow.toISOString());
 
     if (avRes.error) {
       if (isSchemaCacheError(avRes.error)) {
-        const avRows = (await listAvailabilities('group', groupId)).filter((row) => members.includes(row.member_name) && row.start_ts < endWindow.toISOString() && row.end_ts > startWindow.toISOString());
+        const avRows = (await listAvailabilities('event', eventId)).filter((row) => members.includes(row.member_name) && row.start_ts < endWindow.toISOString() && row.end_ts > startWindow.toISOString());
         const perMember: Unavailability[] = members.map((memberName) => ({ member_name: memberName, ranges: [] }));
 
         for (const row of avRows) {
@@ -103,10 +104,10 @@ export async function GET(request: Request, { params }: RouteContext) {
     }
 
     const perMember: Unavailability[] = members.map((memberName) => ({ member_name: memberName, ranges: [] }));
-    for (const r of avRes.data ?? []) {
-      const index = perMember.findIndex((member) => member.member_name === r.member_name);
+    for (const row of avRes.data ?? []) {
+      const index = perMember.findIndex((member) => member.member_name === row.member_name);
       if (index >= 0) {
-        perMember[index].ranges.push({ start: r.start_ts, end: r.end_ts });
+        perMember[index].ranges.push({ start: row.start_ts, end: row.end_ts });
       }
     }
 
