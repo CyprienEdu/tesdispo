@@ -80,8 +80,8 @@ export default function LandingPage() {
           <div className="rounded-[1.5rem] border border-white/10 bg-white/5 p-5">
             <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Preview</p>
             <div className="mt-4 grid grid-cols-7 gap-2 text-center text-xs text-slate-400">
-              {['L', 'M', 'M', 'J', 'V', 'S', 'D'].map((day) => (
-                <span key={day}>{day}</span>
+              {['L', 'M', 'M', 'J', 'V', 'S', 'D'].map((day, index) => (
+                <span key={`${day}-${index}`}>{day}</span>
               ))}
             </div>
             <div className="mt-3 grid grid-cols-7 gap-2">

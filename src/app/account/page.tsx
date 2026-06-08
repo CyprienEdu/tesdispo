@@ -29,7 +29,10 @@ export default function AccountPage() {
     const { error } = await supabase.auth.signUp({
       email: authEmail,
       password,
-      options: { data: { username } }
+      options: {
+        data: { username },
+        emailRedirectTo: `${window.location.origin}/account`
+      }
     });
     setMessage(error ? error.message : 'Compte cree. Verifie ta boite mail si la confirmation est activee.');
   }
