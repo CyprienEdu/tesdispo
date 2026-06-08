@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Check, LogOut, UserRound } from 'lucide-react';
 
 import { createSupabaseBrowserClient } from '@/lib/supabase';
@@ -13,10 +13,7 @@ export default function AccountPage() {
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
   const [message, setMessage] = useState('');
-
-  useEffect(() => {
-    setUsername(displayName || '');
-  }, [displayName]);
+  const profileUsername = username || displayName || '';
 
   async function handleSignup() {
     if (!configured) return;
@@ -25,16 +22,24 @@ export default function AccountPage() {
       return;
     }
 
-    const supabase = createSupabaseBrowserClient();
-    const { error } = await supabase.auth.signUp({
-      email: authEmail,
-      password,
-      options: {
-        data: { username },
-        emailRedirectTo: `${window.location.origin}/account`
-      }
+    const signup = await fetch('/api/auth/signup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: authEmail, password, username })
     });
-    setMessage(error ? error.message : 'Compte cree. Verifie ta boite mail si la confirmation est activee.');
+
+    if (!signup.ok) {
+      const data = await signup.json().catch(() => ({ error: 'signup_failed' }));
+      setMessage(data.error || 'Creation du compte impossible.');
+      return;
+    }
+
+    const supabase = createSupabaseBrowserClient();
+    const { error } = await supabase.auth.signInWithPassword({
+      email: authEmail,
+      password
+    });
+    setMessage(error ? error.message : 'Compte cree. Connecte.');
   }
 
   async function handleLogin() {
@@ -62,7 +67,7 @@ export default function AccountPage() {
 
     const supabase = createSupabaseBrowserClient();
     const { error } = await supabase.auth.updateUser({
-      data: { username: username.trim() }
+      data: { username: profileUsername.trim() }
     });
     setMessage(error ? error.message : 'Pseudo mis a jour.');
     await refreshSession();
@@ -148,7 +153,7 @@ export default function AccountPage() {
                 <label className="mb-2 block text-sm font-medium text-slate-200">Pseudo</label>
                 <input
                   className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-400 focus:border-emerald-300/60"
-                  value={username}
+                  value={profileUsername}
                   onChange={(event) => setUsername(event.target.value)}
                 />
               </div>

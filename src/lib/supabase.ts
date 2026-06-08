@@ -42,6 +42,10 @@ export function createSupabaseClient() {
   return createClient(config.url, config.anonKey);
 }
 
+function getSupabaseServiceRoleKey() {
+  return process.env.SUPABASE_SERVICE_ROLE_KEY;
+}
+
 export function createSupabaseRequestClient(accessToken: string) {
   const config = getSupabaseConfig();
 
@@ -54,6 +58,22 @@ export function createSupabaseRequestClient(accessToken: string) {
       headers: {
         Authorization: `Bearer ${accessToken}`
       }
+    }
+  });
+}
+
+export function createSupabaseAdminClient() {
+  const config = getSupabaseConfig();
+  const serviceRoleKey = getSupabaseServiceRoleKey();
+
+  if (!config || !serviceRoleKey) {
+    throw new Error('Supabase admin env vars are missing');
+  }
+
+  return createClient(config.url, serviceRoleKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false
     }
   });
 }
