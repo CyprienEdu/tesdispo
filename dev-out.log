@@ -291,3 +291,4 @@
  GET /events/edc2dbf8-f29b-40cb-8f91-99c9b6672758 200 in 544ms (next.js: 421ms, application-code: 123ms)
  GET /api/groups 401 in 1335ms (next.js: 1312ms, application-code: 22ms)
  GET /events/edc2dbf8-f29b-40cb-8f91-99c9b6672758 200 in 360ms (next.js: 214ms, application-code: 146ms)
+ GET /events/edc2dbf8-f29b-40cb-8f91-99c9b6672758 200 in 599ms (next.js: 444ms, application-code: 155ms)

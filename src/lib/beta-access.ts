@@ -6,10 +6,5 @@ export function getBetaAllowedEmails() {
 }
 
 export function isBetaAllowed(email: string) {
-  const allowedEmails = getBetaAllowedEmails();
-  if (allowedEmails.length === 0) {
-    return process.env.NODE_ENV !== 'production';
-  }
-
-  return allowedEmails.includes(email.trim().toLowerCase());
+  return Boolean(email.trim());
 }

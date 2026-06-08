@@ -10,3 +10,15 @@
 [browser] Encountered two children with the same key, `M`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version. 
 ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
 ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+[browser] The final argument passed to useEffect changed size between renders. The order and size of this array must remain constant.
+
+Previous: [edc2dbf8-f29b-40cb-8f91-99c9b6672758, month]
+Incoming: [edc2dbf8-f29b-40cb-8f91-99c9b6672758, month, cyprienrubio2006@gmail.com] 
+    at EventPage (src\app\events\[id]\page.tsx:94:12)
+  92 |   }
+  93 |
+> 94 |   useEffect(() => {
+     |            ^
+  95 |     void loadData(view);
+  96 |   }, [resolvedParams.id, view, email]);
+  97 | (src\app\events\[id]\page.tsx:94:12)
