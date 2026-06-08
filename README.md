@@ -53,7 +53,10 @@ npm install --legacy-peer-deps
 ```bash
 NEXT_PUBLIC_SUPABASE_URL=...
 NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+RESEND_API_KEY=re_xxxxxxxxx
 ```
+
+Remplacer `re_xxxxxxxxx` par la vraie cle API Resend.
 
 3. Initialiser la base avec `db/init.sql` dans Supabase SQL Editor.
 
@@ -71,3 +74,4 @@ Puis ouvrir `http://localhost:3000`.
 - `resolved_at` sert de date validee pour un evenement.
 - `archived_at` permet de sortir un evenement du flux visible si besoin.
 - Le calendrier s appuie sur les indisponibilites sauvegardees en base.
+- `POST /api/email/hello` envoie l email de test via Resend.
