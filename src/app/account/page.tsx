@@ -34,12 +34,7 @@ export default function AccountPage() {
       return;
     }
 
-    const supabase = createSupabaseBrowserClient();
-    const { error } = await supabase.auth.signInWithPassword({
-      email: authEmail,
-      password
-    });
-    setMessage(error ? error.message : 'Compte cree. Connecte.');
+    setMessage('Compte cree. Verifie ta boite mail pour confirmer ton compte.');
   }
 
   async function handleLogin() {

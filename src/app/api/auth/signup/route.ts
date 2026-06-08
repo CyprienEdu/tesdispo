@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { isBetaAllowed } from '@/lib/beta-access';
+import { sendSignupConfirmationEmail } from '@/lib/resend';
 import { createSupabaseAdminClient } from '@/lib/supabase';
 
 export async function POST(request: Request) {
@@ -26,15 +27,38 @@ export async function POST(request: Request) {
 
   try {
     const supabase = createSupabaseAdminClient();
-    const { error } = await supabase.auth.admin.createUser({
+    const { data, error } = await supabase.auth.admin.generateLink({
+      type: 'signup',
       email,
       password,
-      email_confirm: true,
-      user_metadata: username ? { username } : undefined
+      options: {
+        data: username ? { username } : undefined,
+        redirectTo: `${new URL(request.url).origin}/account`
+      }
     });
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: error.status ?? 500 });
+    }
+
+    const confirmationUrl = data.properties?.action_link;
+
+    if (!confirmationUrl) {
+      if (data.user?.id) {
+        await supabase.auth.admin.deleteUser(data.user.id);
+      }
+
+      return NextResponse.json({ error: 'confirmation_link_missing' }, { status: 500 });
+    }
+
+    const emailResult = await sendSignupConfirmationEmail(email, confirmationUrl);
+
+    if (emailResult.error) {
+      if (data.user?.id) {
+        await supabase.auth.admin.deleteUser(data.user.id);
+      }
+
+      return NextResponse.json({ error: emailResult.error.message }, { status: 500 });
     }
 
     return NextResponse.json({ ok: true });

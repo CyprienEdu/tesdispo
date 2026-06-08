@@ -21,3 +21,17 @@ export function sendHelloWorldEmail() {
     html: '<p>Congrats on sending your <strong>first email</strong>!</p>'
   });
 }
+
+export function sendSignupConfirmationEmail(to: string, confirmationUrl: string) {
+  return getResend().emails.send({
+    from: 'TesDispo <onboarding@resend.dev>',
+    to,
+    subject: 'Confirme ton compte TesDispo',
+    html: `
+      <p>Confirme ton compte TesDispo :</p>
+      <p><a href="${confirmationUrl}">Confirmer mon compte</a></p>
+      <p>Si tu n'es pas a l'origine de cette demande, ignore ce mail.</p>
+    `,
+    text: `Confirme ton compte TesDispo: ${confirmationUrl}`
+  });
+}
