@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { requireAuth } from '@/lib/api-auth';
-import { addEventMember, isSchemaCacheError, listEventMembers } from '@/lib/local-store';
+import { addEventMember, deleteEventMember, getEventSummary, isSchemaCacheError, listEventMembers } from '@/lib/local-store';
 import { createSupabaseAdminClient } from '@/lib/supabase';
 
 type RouteContext = { params: Promise<{ eventId: string }> };
@@ -94,6 +94,67 @@ export async function POST(request: Request, { params }: RouteContext) {
     }
 
     return NextResponse.json({ data }, { status: 201 });
+  } catch (error) {
+    return NextResponse.json({ error: 'server_error', details: String(error) }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: Request, { params }: RouteContext) {
+  try {
+    const auth = await requireAuth(request);
+    if ('error' in auth) return auth.error;
+
+    const { eventId } = await params;
+    const body = await request.json();
+    const memberName = cleanName(body.member_name);
+
+    if (!memberName) {
+      return NextResponse.json({ error: 'missing_fields' }, { status: 400 });
+    }
+
+    const admin = createSupabaseAdminClient();
+    const event = await admin.from('events').select('id,group_id,owner_name').eq('id', eventId).single();
+
+    if (event.error || !event.data) {
+      if (event.error && isSchemaCacheError(event.error)) {
+        const localSummary = await getEventSummary(eventId);
+        if (!localSummary) return NextResponse.json({ error: 'event_not_found' }, { status: 404 });
+        const canManage =
+          localSummary.owner_name.toLowerCase() === auth.email.toLowerCase() ||
+          String(localSummary.group_owner_name ?? '').toLowerCase() === auth.email.toLowerCase();
+        if (!canManage) return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+        if (localSummary.owner_name.toLowerCase() === memberName.toLowerCase()) {
+          return NextResponse.json({ error: 'owner_cannot_be_removed' }, { status: 400 });
+        }
+
+        await deleteEventMember(eventId, memberName);
+        return NextResponse.json({ ok: true });
+      }
+
+      return NextResponse.json({ error: event.error?.message ?? 'event_not_found' }, { status: 404 });
+    }
+
+    const group = await admin.from('groups').select('owner_name').eq('id', event.data.group_id).single();
+    const canManage =
+      event.data.owner_name.toLowerCase() === auth.email.toLowerCase() ||
+      String(group.data?.owner_name ?? '').toLowerCase() === auth.email.toLowerCase();
+
+    if (!canManage) {
+      return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+    }
+
+    if (event.data.owner_name.toLowerCase() === memberName.toLowerCase()) {
+      return NextResponse.json({ error: 'owner_cannot_be_removed' }, { status: 400 });
+    }
+
+    const memberDelete = await admin.from('event_members').delete().eq('event_id', eventId).eq('member_name', memberName);
+    if (memberDelete.error) {
+      return NextResponse.json({ error: memberDelete.error.message }, { status: 500 });
+    }
+
+    await admin.from('availabilities').delete().eq('scope_type', 'event').eq('scope_id', eventId).eq('member_name', memberName);
+
+    return NextResponse.json({ ok: true });
   } catch (error) {
     return NextResponse.json({ error: 'server_error', details: String(error) }, { status: 500 });
   }

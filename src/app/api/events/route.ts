@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { requireAuth } from '@/lib/api-auth';
-import { createEvent as createLocalEvent, isSchemaCacheError, listEventsWithGroupNames } from '@/lib/local-store';
+import { createEvent as createLocalEvent, getGroupSummary, isSchemaCacheError, listEventsWithGroupNames } from '@/lib/local-store';
 
 function splitNames(value: unknown) {
   if (Array.isArray(value)) {
@@ -107,6 +107,22 @@ export async function POST(request: Request) {
     }
 
     const { supabase } = auth;
+    const groupLookup = await supabase.from('groups').select('owner_name').eq('id', groupId).single();
+
+    if (groupLookup.error || !groupLookup.data) {
+      if (groupLookup.error && isSchemaCacheError(groupLookup.error)) {
+        const localSummary = await getGroupSummary(groupId);
+        if (!localSummary) return NextResponse.json({ error: 'group_not_found' }, { status: 404 });
+        if (localSummary.owner_name.toLowerCase() !== auth.email.toLowerCase()) {
+          return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+        }
+      } else {
+        return NextResponse.json({ error: groupLookup.error?.message ?? 'group_not_found' }, { status: 404 });
+      }
+    } else if (groupLookup.data.owner_name.toLowerCase() !== auth.email.toLowerCase()) {
+      return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+    }
+
     const eventInsert = await supabase.from('events').insert({ group_id: groupId, name, owner_name: ownerName, resolved_at: resolvedAt }).select('*').single();
 
     if (eventInsert.error || !eventInsert.data) {

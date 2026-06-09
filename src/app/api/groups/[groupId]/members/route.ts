@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { requireAuth } from '@/lib/api-auth';
-import { addGroupMember, isSchemaCacheError, listGroupMembers } from '@/lib/local-store';
+import { addGroupMember, deleteGroupMember, getGroupSummary, isSchemaCacheError, listGroupMembers } from '@/lib/local-store';
 import { createSupabaseAdminClient } from '@/lib/supabase';
 
 function cleanName(value: unknown) {
@@ -84,6 +84,68 @@ export async function POST(request: Request, { params }: RouteContext) {
     }
 
     return NextResponse.json({ data }, { status: 201 });
+  } catch (error) {
+    return NextResponse.json({ error: 'server_error', details: String(error) }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: Request, { params }: RouteContext) {
+  try {
+    const auth = await requireAuth(request);
+    if ('error' in auth) return auth.error;
+
+    const { groupId } = await params;
+    const body = await request.json();
+    const memberName = cleanName(body.member_name);
+
+    if (!memberName) {
+      return NextResponse.json({ error: 'missing_fields' }, { status: 400 });
+    }
+
+    const admin = createSupabaseAdminClient();
+    const group = await admin.from('groups').select('id,owner_name').eq('id', groupId).single();
+
+    if (group.error || !group.data) {
+      if (group.error && isSchemaCacheError(group.error)) {
+        const localSummary = await getGroupSummary(groupId);
+        if (!localSummary) return NextResponse.json({ error: 'group_not_found' }, { status: 404 });
+        if (localSummary.owner_name.toLowerCase() !== auth.email.toLowerCase()) {
+          return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+        }
+        if (localSummary.owner_name.toLowerCase() === memberName.toLowerCase()) {
+          return NextResponse.json({ error: 'owner_cannot_be_removed' }, { status: 400 });
+        }
+        await deleteGroupMember(groupId, memberName);
+        return NextResponse.json({ ok: true });
+      }
+
+      return NextResponse.json({ error: group.error?.message ?? 'group_not_found' }, { status: 404 });
+    }
+
+    if (group.data.owner_name.toLowerCase() !== auth.email.toLowerCase()) {
+      return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+    }
+
+    if (group.data.owner_name.toLowerCase() === memberName.toLowerCase()) {
+      return NextResponse.json({ error: 'owner_cannot_be_removed' }, { status: 400 });
+    }
+
+    const events = await admin.from('events').select('id').eq('group_id', groupId);
+    const eventIds = (events.data ?? []).map((event) => event.id).filter(Boolean);
+
+    const memberDelete = await admin.from('group_members').delete().eq('group_id', groupId).eq('member_name', memberName);
+    if (memberDelete.error) {
+      return NextResponse.json({ error: memberDelete.error.message }, { status: 500 });
+    }
+
+    await admin.from('availabilities').delete().eq('scope_type', 'group').eq('scope_id', groupId).eq('member_name', memberName);
+
+    if (eventIds.length > 0) {
+      await admin.from('event_members').delete().in('event_id', eventIds).eq('member_name', memberName);
+      await admin.from('availabilities').delete().eq('scope_type', 'event').in('scope_id', eventIds).eq('member_name', memberName);
+    }
+
+    return NextResponse.json({ ok: true });
   } catch (error) {
     return NextResponse.json({ error: 'server_error', details: String(error) }, { status: 500 });
   }

@@ -53,6 +53,22 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     }
 
     const { supabase } = auth;
+    const groupLookup = await supabase.from('groups').select('owner_name').eq('id', groupId).single();
+
+    if (groupLookup.error || !groupLookup.data) {
+      if (groupLookup.error && isSchemaCacheError(groupLookup.error)) {
+        const localSummary = await getGroupSummary(groupId);
+        if (!localSummary) return NextResponse.json({ error: 'group_not_found' }, { status: 404 });
+        if (localSummary.owner_name.toLowerCase() !== auth.email.toLowerCase()) {
+          return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+        }
+      } else {
+        return NextResponse.json({ error: groupLookup.error?.message ?? 'group_not_found' }, { status: 404 });
+      }
+    } else if (groupLookup.data.owner_name.toLowerCase() !== auth.email.toLowerCase()) {
+      return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+    }
+
     const { data, error } = await supabase.from('groups').update({ name }).eq('id', groupId).select('*').single();
 
     if (error || !data) {
@@ -80,6 +96,22 @@ export async function DELETE(request: Request, { params }: RouteContext) {
 
   const { groupId } = await params;
   const { supabase } = auth;
+  const groupLookup = await supabase.from('groups').select('owner_name').eq('id', groupId).single();
+
+  if (groupLookup.error || !groupLookup.data) {
+    if (groupLookup.error && isSchemaCacheError(groupLookup.error)) {
+      const localSummary = await getGroupSummary(groupId);
+      if (!localSummary) return NextResponse.json({ error: 'group_not_found' }, { status: 404 });
+      if (localSummary.owner_name.toLowerCase() !== auth.email.toLowerCase()) {
+        return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+      }
+    } else {
+      return NextResponse.json({ error: groupLookup.error?.message ?? 'group_not_found' }, { status: 404 });
+    }
+  } else if (groupLookup.data.owner_name.toLowerCase() !== auth.email.toLowerCase()) {
+    return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+  }
+
   const { error } = await supabase.from('groups').delete().eq('id', groupId);
 
   if (error) {

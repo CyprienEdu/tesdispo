@@ -62,6 +62,7 @@ type GroupSummary = Group & {
 type EventSummary = EventItem & {
   members?: EventMember[];
   group_name?: string;
+  group_owner_name?: string;
 };
 
 const storePath = path.join(process.cwd(), '.tesdispo.mock-db.json');
@@ -208,6 +209,28 @@ export async function addGroupMember(groupId: string, memberName: string) {
   });
 }
 
+export async function deleteGroupMember(groupId: string, memberName: string) {
+  return mutate(async (state) => {
+    const deleted = state.group_members.filter((member) => member.group_id === groupId && member.member_name === memberName);
+    state.group_members = state.group_members.filter((member) => !(member.group_id === groupId && member.member_name === memberName));
+
+    const groupEventIds = new Set(state.events.filter((event) => event.group_id === groupId).map((event) => event.id));
+    state.event_members = state.event_members.filter(
+      (member) => !(groupEventIds.has(member.event_id) && member.member_name === memberName)
+    );
+    state.availabilities = state.availabilities.filter(
+      (availability) =>
+        !(
+          availability.member_name === memberName &&
+          ((availability.scope_type === 'group' && availability.scope_id === groupId) ||
+            (availability.scope_type === 'event' && groupEventIds.has(availability.scope_id)))
+        )
+    );
+
+    return deleted;
+  });
+}
+
 export async function listEvents() {
   const state = await readState();
   return [...state.events].sort((left, right) => right.created_at.localeCompare(left.created_at));
@@ -269,6 +292,7 @@ export async function getEventSummary(eventId: string): Promise<EventSummary | n
   return {
     ...event,
     group_name: group?.name ?? '',
+    group_owner_name: group?.owner_name ?? '',
     members: state.event_members.filter((member) => member.event_id === eventId)
   };
 }
@@ -289,6 +313,17 @@ export async function addEventMember(eventId: string, memberName: string) {
 
     state.event_members.push(record);
     return record;
+  });
+}
+
+export async function deleteEventMember(eventId: string, memberName: string) {
+  return mutate(async (state) => {
+    const deleted = state.event_members.filter((member) => member.event_id === eventId && member.member_name === memberName);
+    state.event_members = state.event_members.filter((member) => !(member.event_id === eventId && member.member_name === memberName));
+    state.availabilities = state.availabilities.filter(
+      (availability) => !(availability.scope_type === 'event' && availability.scope_id === eventId && availability.member_name === memberName)
+    );
+    return deleted;
   });
 }
 

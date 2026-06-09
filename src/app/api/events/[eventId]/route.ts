@@ -1,9 +1,39 @@
 import { NextResponse } from 'next/server';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { requireAuth } from '@/lib/api-auth';
 import { deleteEvent as deleteLocalEvent, getEventSummary, isSchemaCacheError, updateEvent as updateLocalEvent } from '@/lib/local-store';
 
 type RouteContext = { params: Promise<{ eventId: string }> };
+
+async function canManageEvent(supabase: SupabaseClient, eventId: string, email: string) {
+  const eventRes = await supabase.from('events').select('owner_name,group_id').eq('id', eventId).single();
+
+  if (eventRes.error || !eventRes.data) {
+    if (eventRes.error && isSchemaCacheError(eventRes.error)) {
+      const localSummary = await getEventSummary(eventId);
+      if (!localSummary) return { ok: false, missing: true };
+      return {
+        ok:
+          localSummary.owner_name.toLowerCase() === email.toLowerCase() ||
+          String(localSummary.group_owner_name ?? '').toLowerCase() === email.toLowerCase(),
+        missing: false
+      };
+    }
+
+    return { ok: false, missing: true, error: eventRes.error?.message };
+  }
+
+  const groupRes = await supabase.from('groups').select('owner_name').eq('id', eventRes.data.group_id).single();
+  const groupOwner = groupRes.data?.owner_name ?? '';
+
+  return {
+    ok:
+      eventRes.data.owner_name.toLowerCase() === email.toLowerCase() ||
+      String(groupOwner).toLowerCase() === email.toLowerCase(),
+    missing: false
+  };
+}
 
 export async function GET(request: Request, { params }: RouteContext) {
   const auth = await requireAuth(request);
@@ -62,6 +92,14 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     }
 
     const { supabase } = auth;
+    const management = await canManageEvent(supabase, eventId, auth.email);
+    if (management.missing) {
+      return NextResponse.json({ error: management.error ?? 'event_not_found' }, { status: 404 });
+    }
+    if (!management.ok) {
+      return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+    }
+
     const payload: Record<string, string | null> = {};
 
     if (name) payload.name = name;
@@ -95,6 +133,14 @@ export async function DELETE(request: Request, { params }: RouteContext) {
 
   const { eventId } = await params;
   const { supabase } = auth;
+  const management = await canManageEvent(supabase, eventId, auth.email);
+  if (management.missing) {
+    return NextResponse.json({ error: management.error ?? 'event_not_found' }, { status: 404 });
+  }
+  if (!management.ok) {
+    return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+  }
+
   const { error } = await supabase.from('events').delete().eq('id', eventId);
 
   if (error) {
