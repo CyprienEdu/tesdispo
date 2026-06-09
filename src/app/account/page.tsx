@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Check, LogOut, UserRound } from 'lucide-react';
 
 import { createSupabaseBrowserClient } from '@/lib/supabase';
@@ -8,6 +9,7 @@ import { useAuth } from '@/components/auth-context';
 import { isBetaAllowed } from '@/lib/beta-access';
 
 export default function AccountPage() {
+  const router = useRouter();
   const { configured, loading, session, email, displayName, refreshSession, signOut } = useAuth();
   const [authEmail, setAuthEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -15,32 +17,45 @@ export default function AccountPage() {
   const [message, setMessage] = useState('');
   const profileUsername = username || displayName || '';
 
+  function getSafeNextPath() {
+    const nextPath = new URLSearchParams(window.location.search).get('next') ?? '';
+    return nextPath.startsWith('/') && !nextPath.startsWith('//') ? nextPath : '';
+  }
+
+  useEffect(() => {
+    if (!session) return;
+    const safeNextPath = getSafeNextPath();
+    if (safeNextPath) {
+      router.replace(safeNextPath);
+    }
+  }, [router, session]);
+
   async function handleSignup() {
     if (!configured) return;
     if (!isBetaAllowed(authEmail)) {
-      setMessage('Email non autorise pour cette beta.');
+      setMessage('Email non autorisé pour cette bêta.');
       return;
     }
 
     const signup = await fetch('/api/auth/signup', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: authEmail, password, username })
+      body: JSON.stringify({ email: authEmail, password, username, next: getSafeNextPath() })
     });
 
     if (!signup.ok) {
       const data = await signup.json().catch(() => ({ error: 'signup_failed' }));
-      setMessage(data.error || 'Creation du compte impossible.');
+      setMessage(data.error || 'Création du compte impossible.');
       return;
     }
 
-    setMessage('Compte cree. Verifie ta boite mail pour confirmer ton compte.');
+    setMessage('Compte créé. Vérifie ta boîte mail pour confirmer ton compte.');
   }
 
   async function handleLogin() {
     if (!configured) return;
     if (!isBetaAllowed(authEmail)) {
-      setMessage('Email non autorise pour cette beta.');
+      setMessage('Email non autorisé pour cette bêta.');
       return;
     }
 
@@ -49,13 +64,22 @@ export default function AccountPage() {
       email: authEmail,
       password
     });
-    setMessage(error ? error.message : 'Connecte.');
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+
+    setMessage('Connecté.');
+    const safeNextPath = getSafeNextPath();
+    if (safeNextPath) {
+      router.push(safeNextPath);
+    }
   }
 
   async function saveProfile() {
     if (!configured) return;
     if (!isBetaAllowed(email)) {
-      setMessage('Email non autorise pour cette beta.');
+      setMessage('Email non autorisé pour cette bêta.');
       await signOut();
       return;
     }
@@ -64,7 +88,7 @@ export default function AccountPage() {
     const { error } = await supabase.auth.updateUser({
       data: { username: profileUsername.trim() }
     });
-    setMessage(error ? error.message : 'Pseudo mis a jour.');
+    setMessage(error ? error.message : 'Pseudo mis à jour.');
     await refreshSession();
   }
 
@@ -82,9 +106,9 @@ export default function AccountPage() {
         <section className="grid gap-6 rounded-[2rem] border border-white/10 bg-slate-950/60 p-6 shadow-2xl shadow-black/30 backdrop-blur-xl lg:grid-cols-2">
           <div>
             <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Compte</p>
-            <h1 className="mt-2 text-3xl font-semibold text-white">Accede a ton espace</h1>
+              <h1 className="mt-2 text-3xl font-semibold text-white">Accède à ton espace</h1>
             <p className="mt-3 text-sm leading-6 text-slate-300">
-              Cree ton compte ou connecte-toi pour retrouver tes groupes, tes evenements et ta page A venir.
+              Crée ton compte ou connecte-toi pour retrouver tes groupes, tes évènements et ta page À venir.
             </p>
           </div>
 
@@ -115,7 +139,7 @@ export default function AccountPage() {
                 onClick={handleSignup}
                 className="rounded-full bg-emerald-400 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-300"
               >
-                Creer un compte
+                Créer un compte
               </button>
               <button
                 type="button"
@@ -133,10 +157,10 @@ export default function AccountPage() {
         <section className="grid gap-6 rounded-[2rem] border border-white/10 bg-slate-950/60 p-6 shadow-2xl shadow-black/30 backdrop-blur-xl lg:grid-cols-[1fr_0.8fr]">
           <div>
             <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Mon compte</p>
-            <h1 className="mt-2 text-3xl font-semibold text-white">Gere ton profil</h1>
+              <h1 className="mt-2 text-3xl font-semibold text-white">Gère ton profil</h1>
             <p className="mt-3 text-sm leading-6 text-slate-300">
-              Tu es connecte avec <span className="font-semibold text-white">{email}</span>. Tu peux
-              mettre un pseudo, puis naviguer vers tes groupes et evenements.
+              Tu es connecté avec <span className="font-semibold text-white">{email}</span>. Tu peux
+              mettre un pseudo, puis naviguer vers tes groupes et évènements.
             </p>
 
             <div className="mt-6 space-y-4">
@@ -167,7 +191,7 @@ export default function AccountPage() {
                   className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
                 >
                   <LogOut className="h-4 w-4" />
-                  Se deconnecter
+                  Se déconnecter
                 </button>
               </div>
               {message ? <p className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-emerald-100">{message}</p> : null}
@@ -186,7 +210,7 @@ export default function AccountPage() {
             </div>
 
             <div className="mt-5 space-y-3 text-sm text-slate-300">
-              <p>Tu arriveras directement sur la page A venir apres connexion.</p>
+              <p>Tu arriveras directement sur la page À venir après connexion.</p>
               <p>Ton compte sert de base pour rejoindre des groupes et marquer tes indispos.</p>
               <p>Plus tard, on pourra brancher la synchronisation calendrier externe ici.</p>
             </div>

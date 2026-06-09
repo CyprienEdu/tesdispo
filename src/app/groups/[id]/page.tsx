@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { use, useEffect, useMemo, useState } from 'react';
-import { ArrowRight, CalendarRange, UserPlus, Users } from 'lucide-react';
+import { ArrowRight, CalendarRange, Copy, Link as LinkIcon, UserPlus, Users } from 'lucide-react';
 import { format } from 'date-fns';
 
 import { useAuth } from '@/components/auth-context';
@@ -28,6 +28,7 @@ export default function GroupPage({ params }: { params: Promise<{ id: string }> 
   const [eventName, setEventName] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const invitePath = `/join/group/${resolvedParams.id}`;
 
   async function load() {
     if (!email) return;
@@ -65,12 +66,12 @@ export default function GroupPage({ params }: { params: Promise<{ id: string }> 
     });
     const json = await response.json().catch(() => ({}));
     if (!response.ok) {
-      setMessage(json.error ?? 'Impossible dajouter le membre.');
+      setMessage(json.error ?? "Impossible d'ajouter le membre.");
       return;
     }
 
     setMemberName('');
-    setMessage('Membre ajoute.');
+    setMessage('Membre ajouté.');
     await load();
   }
 
@@ -90,13 +91,19 @@ export default function GroupPage({ params }: { params: Promise<{ id: string }> 
 
     const json = await response.json().catch(() => ({}));
     if (!response.ok) {
-      setMessage(json.error ?? 'Impossible de creer l evenement.');
+      setMessage(json.error ?? "Impossible de créer l'évènement.");
       return;
     }
 
     setEventName('');
-    setMessage('Evenement cree.');
+    setMessage('Évènement créé.');
     await load();
+  }
+
+  async function copyInviteLink() {
+    const link = `${window.location.origin}${invitePath}`;
+    await navigator.clipboard.writeText(link);
+    setMessage('Lien copié.');
   }
 
   if (error) {
@@ -130,7 +137,7 @@ export default function GroupPage({ params }: { params: Promise<{ id: string }> 
           </div>
 
           <p className="mt-4 text-sm leading-6 text-slate-300">
-            Un groupe regroupe les personnes avec qui tu partages des evenements ponctuels. Plus tard,
+            Un groupe regroupe les personnes avec qui tu partages des évènements ponctuels. Plus tard,
             on pourra ajouter le chat ici.
           </p>
 
@@ -163,6 +170,18 @@ export default function GroupPage({ params }: { params: Promise<{ id: string }> 
               <UserPlus className="h-4 w-4" />
               Ajouter au groupe
             </button>
+            <button
+              type="button"
+              onClick={copyInviteLink}
+              className="inline-flex items-center gap-2 rounded-full border border-emerald-300/30 bg-emerald-300/10 px-4 py-3 text-sm font-semibold text-emerald-50 transition hover:bg-emerald-300/15"
+            >
+              <Copy className="h-4 w-4" />
+              Copier le lien
+            </button>
+            <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-300">
+              <LinkIcon className="h-4 w-4 text-emerald-100" />
+              <span className="truncate">{invitePath}</span>
+            </div>
             {message ? <p className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-emerald-100">{message}</p> : null}
           </div>
         </article>
@@ -170,18 +189,18 @@ export default function GroupPage({ params }: { params: Promise<{ id: string }> 
         <article className="rounded-[2rem] border border-white/10 bg-slate-950/60 p-6 shadow-2xl shadow-black/30 backdrop-blur-xl">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Evenements</p>
-              <h2 className="mt-1 text-2xl font-semibold text-white">Evenements du groupe</h2>
+              <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Évènements</p>
+              <h2 className="mt-1 text-2xl font-semibold text-white">Évènements du groupe</h2>
             </div>
             <div className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-200">
-              {eventsSorted.length} evenement(s)
+              {eventsSorted.length} évènement(s)
             </div>
           </div>
 
           <div className="mt-4 space-y-3">
             <input
               className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-400 focus:border-emerald-300/60"
-              placeholder="Nom du nouvel evenement"
+              placeholder="Nom du nouvel évènement"
               value={eventName}
               onChange={(event) => setEventName(event.target.value)}
             />
@@ -191,14 +210,14 @@ export default function GroupPage({ params }: { params: Promise<{ id: string }> 
               className="inline-flex items-center gap-2 rounded-full bg-emerald-400 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-300"
             >
               <CalendarRange className="h-4 w-4" />
-              Creer un evenement
+              Créer un évènement
             </button>
           </div>
 
           <div className="mt-5 grid max-h-[calc(100vh-28rem)] gap-3 overflow-y-auto pr-1">
             {eventsSorted.length === 0 ? (
               <p className="rounded-2xl border border-dashed border-white/10 bg-white/5 px-4 py-6 text-sm text-slate-400">
-                Aucun evenement pour le moment.
+                Aucun évènement pour le moment.
               </p>
             ) : (
               eventsSorted.map((event) => {
@@ -214,7 +233,7 @@ export default function GroupPage({ params }: { params: Promise<{ id: string }> 
                         <div className="flex flex-wrap items-center gap-2">
                           <p className="text-lg font-semibold text-white">{event.name}</p>
                           <span className="rounded-full border border-white/10 bg-slate-900/60 px-3 py-1 text-xs text-slate-300">
-                            {isUpcoming ? 'A venir' : event.resolved_at ? 'Passe' : 'A planifier'}
+                            {isUpcoming ? 'À venir' : event.resolved_at ? 'Passé' : 'À planifier'}
                           </span>
                         </div>
                         <p className="mt-1 text-sm text-slate-300">Owner: {event.owner_name}</p>
@@ -223,7 +242,7 @@ export default function GroupPage({ params }: { params: Promise<{ id: string }> 
                             {format(new Date(event.resolved_at), 'dd MMM yyyy HH:mm')}
                           </p>
                         ) : (
-                          <p className="mt-2 text-sm text-slate-400">Date non fixee.</p>
+                          <p className="mt-2 text-sm text-slate-400">Date non fixée.</p>
                         )}
                       </div>
                       <ArrowRight className="mt-1 h-4 w-4 text-slate-400 transition group-hover:translate-x-0.5 group-hover:text-white" />

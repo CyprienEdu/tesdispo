@@ -11,7 +11,7 @@ type Group = { id: string; name: string; owner_name: string; created_at: string 
 const scopes = [
   { value: 'all', label: 'Tous' },
   { value: 'owned', label: 'Mes groupes' },
-  { value: 'invited', label: 'Invites' }
+  { value: 'invited', label: 'Invités' }
 ] as const;
 
 type Scope = (typeof scopes)[number]['value'];
@@ -58,11 +58,11 @@ export default function GroupsPage() {
 
     const json = await response.json().catch(() => ({}));
     if (!response.ok) {
-      setMessage(json.error ?? 'Impossible de creer le groupe.');
+      setMessage(json.error ?? 'Impossible de créer le groupe.');
       return;
     }
 
-    setMessage('Groupe cree.');
+    setMessage('Groupe créé.');
     setGroupName('');
     setInviteMembers('');
     await refresh();
@@ -91,7 +91,7 @@ export default function GroupsPage() {
           </div>
 
           <p className="mt-4 text-sm leading-6 text-slate-300">
-            Un groupe rassemble des gens qui partagent des evenements ponctuels. Clique sur un groupe pour voir ses evenements et ouvrir un event.
+            Un groupe rassemble des gens qui partagent des évènements ponctuels. Clique sur un groupe pour voir ses évènements et ouvrir un event.
           </p>
 
           <div className="mt-6 grid gap-3 sm:grid-cols-3">
@@ -120,7 +120,7 @@ export default function GroupsPage() {
             </div>
             <div>
               <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Nouveau groupe</p>
-              <h2 className="mt-1 text-2xl font-semibold text-white">Creer un espace</h2>
+              <h2 className="mt-1 text-2xl font-semibold text-white">Créer un espace</h2>
             </div>
           </div>
 
@@ -133,7 +133,7 @@ export default function GroupsPage() {
             />
             <input
               className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-400 focus:border-emerald-300/60"
-              placeholder="Inviter (emails separes par des virgules)"
+              placeholder="Inviter (emails séparés par des virgules)"
               value={inviteMembers}
               onChange={(event) => setInviteMembers(event.target.value)}
             />
@@ -142,7 +142,7 @@ export default function GroupsPage() {
               onClick={createGroup}
               className="inline-flex items-center gap-2 rounded-full bg-emerald-400 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-300"
             >
-              Creer le groupe
+              Créer le groupe
               <ArrowRight className="h-4 w-4" />
             </button>
           </div>

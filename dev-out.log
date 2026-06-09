@@ -304,3 +304,8 @@
  GET /events 200 in 132ms (next.js: 7ms, application-code: 125ms)
   Reload env: .env.local
   Reload env: .env.local
+ GET / 200 in 2.7s (next.js: 2.2s, application-code: 494ms)
+ GET /upcoming 200 in 62ms (next.js: 18ms, application-code: 44ms)
+ GET /upcoming 200 in 207ms (next.js: 108ms, application-code: 99ms)
+ GET /api/events?status=upcoming 200 in 2.7s (next.js: 2.0s, application-code: 700ms)
+ GET /api/events?status=upcoming 200 in 2.7s (next.js: 1992ms, application-code: 705ms)

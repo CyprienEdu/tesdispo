@@ -6,7 +6,7 @@ import { Chrome } from '@/components/chrome';
 
 export const metadata: Metadata = {
   title: 'TesDispo | Sorties et vacances entre amis',
-  description: 'Organisez des sorties, week-ends et vacances en voyant les indisponibilites du jour, de la semaine et du mois.'
+  description: 'Organisez des sorties, week-ends et vacances en voyant les indisponibilités du jour, de la semaine et du mois.'
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

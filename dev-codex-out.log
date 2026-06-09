@@ -1,0 +1,14 @@
+
+> tesdispo@0.1.0 dev
+> next dev --webpack --port 3001
+
+▲ Next.js 16.2.7 (webpack)
+- Local:         http://localhost:3001
+- Network:       http://192.168.1.24:3001
+- Environments: .env.local
+✓ Ready in 1285ms
+
+○ Compiling / ...
+ GET / 200 in 7.0s (next.js: 6.3s, application-code: 686ms)
+ GET / 200 in 102ms (next.js: 13ms, application-code: 89ms)
+[?25h

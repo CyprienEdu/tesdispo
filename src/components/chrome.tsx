@@ -8,9 +8,9 @@ import { useEffect, useMemo, useState } from 'react';
 import { useAuth } from './auth-context';
 
 const appNav = [
-  { href: '/upcoming', label: 'A venir', icon: Sparkles },
+  { href: '/upcoming', label: 'À venir', icon: Sparkles },
   { href: '/groups', label: 'Groupes', icon: Users },
-  { href: '/events', label: 'Evenements', icon: CalendarDays }
+  { href: '/events', label: 'Évènements', icon: CalendarDays }
 ];
 
 function isActive(pathname: string, href: string) {
@@ -30,7 +30,8 @@ export function Chrome({ children }: { children: React.ReactNode }) {
   const { loading, session, displayName, email, signOut } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const isPublicRoute = pathname === '/' || pathname === '/account';
+  const isInviteRoute = pathname.startsWith('/join/');
+  const isPublicRoute = pathname === '/' || pathname === '/account' || isInviteRoute;
   const isLanding = pathname === '/';
   const isAccount = pathname === '/account';
   const isProtected = !isPublicRoute;
@@ -44,7 +45,7 @@ export function Chrome({ children }: { children: React.ReactNode }) {
     }
 
     if (isProtected && !session) {
-      router.replace('/account');
+      router.replace(`/account?next=${encodeURIComponent(pathname)}`);
     }
   }, [isLanding, isProtected, loading, router, session]);
 
@@ -71,7 +72,7 @@ export function Chrome({ children }: { children: React.ReactNode }) {
             </div>
             <div>
               <p className="text-sm font-semibold text-white">TesDispo</p>
-              <p className="text-xs text-slate-400">Sorties, events et calendrier groupe</p>
+              <p className="text-xs text-slate-400">Sorties, events et calendrier de groupe</p>
             </div>
           </Link>
 
@@ -130,7 +131,7 @@ export function Chrome({ children }: { children: React.ReactNode }) {
                 }`}
               >
                 <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                  <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Connecte</p>
+                  <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Connecté</p>
                   <p className="mt-2 text-sm font-medium text-white">{accountLabel}</p>
                   <p className="mt-1 text-xs text-slate-400">{email}</p>
                 </div>
@@ -141,7 +142,7 @@ export function Chrome({ children }: { children: React.ReactNode }) {
                     className="flex items-center gap-3 rounded-2xl px-4 py-3 text-sm text-slate-100 transition hover:bg-white/8"
                   >
                     <Mail className="h-4 w-4" />
-                    Gerer mon compte
+                    Gérer mon compte
                   </Link>
                   <button
                     type="button"
@@ -153,7 +154,7 @@ export function Chrome({ children }: { children: React.ReactNode }) {
                     className="flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm text-rose-100 transition hover:bg-rose-500/10"
                   >
                     <LogOut className="h-4 w-4" />
-                    Se deconnecter
+                    Se déconnecter
                   </button>
                 </div>
               </div>
@@ -164,9 +165,9 @@ export function Chrome({ children }: { children: React.ReactNode }) {
         {!session && isLanding ? (
           <div className="border-t border-white/10 bg-white/5">
             <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-3 text-sm text-slate-300 sm:px-6 lg:px-8">
-              <p>Vue calendrier type Google Calendar, pensee pour les sorties entre amis.</p>
+              <p>Vue calendrier type Google Calendar, pensée pour les sorties entre amis.</p>
               <Link href="/account" className="font-semibold text-emerald-100 hover:text-white">
-                Creer un compte
+                Créer un compte
               </Link>
             </div>
           </div>

@@ -21,9 +21,9 @@ type Filter = 'all' | 'planned' | 'upcoming' | 'past';
 
 const filters = [
   { value: 'all', label: 'Tous' },
-  { value: 'planned', label: 'A planifier' },
-  { value: 'upcoming', label: 'A venir' },
-  { value: 'past', label: 'Passes' }
+  { value: 'planned', label: 'À planifier' },
+  { value: 'upcoming', label: 'À venir' },
+  { value: 'past', label: 'Passés' }
 ] as const;
 
 function getEventFilter(item: EventItem): Filter {
@@ -70,22 +70,22 @@ export default function EventsPage() {
                 <SquareStack className="h-6 w-6" />
               </div>
               <div>
-                <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Evenements</p>
+                <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Évènements</p>
                 <h1 className="mt-1 text-3xl font-semibold text-white">Tous les plans du groupe</h1>
               </div>
             </div>
             <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-300">
-              Ici tu retrouves les evenements ponctuels, qu ils soient encore a planifier ou deja dates.
-              Une fois la date passee, ils sortent naturellement de la page A venir.
+              Ici tu retrouves les évènements ponctuels, qu&apos;ils soient encore à planifier ou déjà datés.
+              Une fois la date passée, ils sortent naturellement de la page À venir.
             </p>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-4">
             {[
               { icon: SquareStack, key: 'all' as const, label: 'Total' },
-              { icon: Clock3, key: 'planned' as const, label: 'A planifier' },
-              { icon: CalendarRange, key: 'upcoming' as const, label: 'A venir' },
-              { icon: CheckCircle2, key: 'past' as const, label: 'Passes' }
+              { icon: Clock3, key: 'planned' as const, label: 'À planifier' },
+              { icon: CalendarRange, key: 'upcoming' as const, label: 'À venir' },
+              { icon: CheckCircle2, key: 'past' as const, label: 'Passés' }
             ].map((item) => {
               const Icon = item.icon;
               return (
@@ -123,7 +123,7 @@ export default function EventsPage() {
         <div className="mt-5 grid max-h-[calc(100vh-26rem)] gap-3 overflow-y-auto pr-1">
           {visibleItems.length === 0 ? (
             <p className="rounded-2xl border border-dashed border-white/10 bg-white/5 px-4 py-6 text-sm text-slate-400">
-              Aucun evenement pour ce filtre.
+              Aucun évènement pour ce filtre.
             </p>
           ) : (
             visibleItems.map((item) => {
@@ -149,7 +149,7 @@ export default function EventsPage() {
                           Date: {format(new Date(item.resolved_at), 'dd MMM yyyy HH:mm')}
                         </p>
                       ) : (
-                        <p className="mt-2 text-sm text-slate-400">Aucune date fixee pour le moment.</p>
+                        <p className="mt-2 text-sm text-slate-400">Aucune date fixée pour le moment.</p>
                       )}
                     </div>
                     <ArrowRight className="mt-1 h-4 w-4 text-slate-400 transition group-hover:translate-x-0.5 group-hover:text-white" />

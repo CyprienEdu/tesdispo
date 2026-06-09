@@ -2,7 +2,7 @@
 
 import { use, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { ArrowRight, CalendarCheck2, UserPlus, Users } from 'lucide-react';
+import { ArrowRight, CalendarCheck2, Copy, Link as LinkIcon, UserPlus, Users } from 'lucide-react';
 import { format, startOfDay } from 'date-fns';
 
 import { AvailabilityCalendar, type AvailabilityRange, type CalendarView } from '@/components/availability-calendar';
@@ -60,6 +60,7 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
   const [eventDate, setEventDate] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const invitePath = `/join/event/${resolvedParams.id}`;
 
   async function loadData(nextView: CalendarView = view) {
     if (!email) return;
@@ -75,7 +76,7 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
     const periodsJson = await periodsRes.json().catch(() => ({ periods: [] }));
 
     if (!eventRes.ok || !eventJson?.data?.event) {
-      setError(eventJson?.error ?? 'Evenement introuvable.');
+      setError(eventJson?.error ?? 'Évènement introuvable.');
       setPayload(null);
       return;
     }
@@ -106,13 +107,19 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
     const json = await response.json().catch(() => ({}));
 
     if (!response.ok) {
-      setMessage(json.error ?? 'Impossible dajouter le membre.');
+      setMessage(json.error ?? "Impossible d'ajouter le membre.");
       return;
     }
 
     setMemberName('');
-    setMessage('Membre ajoute a l evenement.');
+    setMessage("Membre ajouté à l'évènement.");
     await loadData(view);
+  }
+
+  async function copyInviteLink() {
+    const link = `${window.location.origin}${invitePath}`;
+    await navigator.clipboard.writeText(link);
+    setMessage('Lien copié.');
   }
 
   async function saveEventDate(value: string) {
@@ -128,7 +135,7 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
       return;
     }
 
-    setMessage('Date validee.');
+    setMessage('Date validée.');
     await loadData(view);
   }
 
@@ -160,7 +167,7 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
 
       const json = await response.json().catch(() => ({}));
       if (!response.ok) {
-        setMessage(json.error ?? 'Impossible de supprimer lindisponibilite.');
+        setMessage(json.error ?? "Impossible de supprimer l'indisponibilité.");
         return;
       }
 
@@ -184,13 +191,13 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
         const createResponse = await postAvailability(part.start, part.end, part.note ?? 'Bloque depuis le calendrier');
         if (!createResponse.ok) {
           const createJson = await createResponse.json().catch(() => ({}));
-          setMessage(createJson.error ?? 'Indisponibilite retiree partiellement.');
+          setMessage(createJson.error ?? 'Indisponibilité retirée partiellement.');
           await loadData(view);
           return;
         }
       }
 
-      setMessage('Indisponibilite retiree.');
+      setMessage('Indisponibilité retirée.');
       await loadData(view);
       return;
     }
@@ -205,11 +212,11 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
 
     const json = await response.json().catch(() => ({}));
     if (!response.ok) {
-      setMessage(json.error ?? 'Impossible denregistrer lindisponibilite.');
+      setMessage(json.error ?? "Impossible d'enregistrer l'indisponibilité.");
       return;
     }
 
-    setMessage('Indisponibilite ajoutee.');
+    setMessage('Indisponibilité ajoutée.');
     await loadData(view);
   }
 
@@ -235,17 +242,17 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
         <article className="rounded-[2rem] border border-white/10 bg-slate-950/60 p-6 shadow-2xl shadow-black/30 backdrop-blur-xl">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Evenement</p>
+              <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Évènement</p>
               <h1 className="mt-1 text-3xl font-semibold text-white">{payload.event.name}</h1>
               <p className="mt-2 text-sm text-slate-300">
                 Groupe: {payload.group?.name ?? 'Sans groupe'} - Owner: {payload.event.owner_name}
               </p>
               {payload.event.resolved_at ? (
                 <p className="mt-2 text-sm text-emerald-100">
-                  Date fixee: {format(new Date(payload.event.resolved_at), 'dd MMM yyyy HH:mm')}
+                  Date fixée: {format(new Date(payload.event.resolved_at), 'dd MMM yyyy HH:mm')}
                 </p>
               ) : (
-                <p className="mt-2 text-sm text-slate-400">Date non fixee pour le moment.</p>
+                <p className="mt-2 text-sm text-slate-400">Date non fixée pour le moment.</p>
               )}
             </div>
 
@@ -253,7 +260,7 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
               href="/upcoming"
               className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
             >
-              Voir A venir
+              Voir À venir
               <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
@@ -302,7 +309,7 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
               </div>
               <div>
                 <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Participants</p>
-                <h2 className="mt-1 text-2xl font-semibold text-white">Membres de l event</h2>
+                <h2 className="mt-1 text-2xl font-semibold text-white">Membres de l&apos;event</h2>
               </div>
             </div>
 
@@ -327,14 +334,26 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
                 className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
               >
                 <UserPlus className="h-4 w-4" />
-                Inviter a l event
+                Inviter à l&apos;event
               </button>
+              <button
+                type="button"
+                onClick={copyInviteLink}
+                className="inline-flex items-center gap-2 rounded-full border border-emerald-300/30 bg-emerald-300/10 px-4 py-3 text-sm font-semibold text-emerald-50 transition hover:bg-emerald-300/15"
+              >
+                <Copy className="h-4 w-4" />
+                Copier le lien
+              </button>
+              <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-300">
+                <LinkIcon className="h-4 w-4 text-emerald-100" />
+                <span className="truncate">{invitePath}</span>
+              </div>
             </div>
           </article>
 
           <article className="rounded-[2rem] border border-white/10 bg-slate-950/60 p-6 shadow-2xl shadow-black/30 backdrop-blur-xl">
-            <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Synthèse</p>
-            <h2 className="mt-1 text-2xl font-semibold text-white">Periodes ideales</h2>
+            <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Synthèse</p>
+            <h2 className="mt-1 text-2xl font-semibold text-white">Périodes idéales</h2>
             <p className="mt-2 text-sm leading-6 text-slate-300">
               Les plages ci-dessous sont les meilleures options pour valider une date commune.
             </p>
@@ -342,7 +361,7 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
             <div className="mt-4 space-y-3">
               {fullyFreePeriods.length === 0 ? (
                 <p className="rounded-2xl border border-dashed border-white/10 bg-white/5 px-4 py-6 text-sm text-slate-400">
-                  Pas encore de periode totalement libre. Continue a ajouter les indisponibilites du groupe.
+                  Pas encore de période totalement libre. Continue à ajouter les indisponibilités du groupe.
                 </p>
               ) : (
                 fullyFreePeriods.map((period) => (

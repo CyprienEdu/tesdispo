@@ -233,7 +233,7 @@ export function AvailabilityCalendar({
                 : format(anchorDate, 'yyyy')}
           </h3>
           <p className="mt-2 text-sm text-slate-300">
-            Clique sur un jour ou fais un glisser deposer pour marquer une indisponibilite.
+            Clique sur un jour ou fais un glisser-déposer pour marquer une indisponibilité.
           </p>
         </div>
 

@@ -30,7 +30,7 @@ export function sendSignupConfirmationEmail(to: string, confirmationUrl: string)
     html: `
       <p>Confirme ton compte TesDispo :</p>
       <p><a href="${confirmationUrl}">Confirmer mon compte</a></p>
-      <p>Si tu n'es pas a l'origine de cette demande, ignore ce mail.</p>
+      <p>Si tu n'es pas à l'origine de cette demande, ignore ce mail.</p>
     `,
     text: `Confirme ton compte TesDispo: ${confirmationUrl}`
   });

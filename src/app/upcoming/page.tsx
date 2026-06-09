@@ -47,12 +47,12 @@ export default function UpcomingPage() {
                 <CalendarClock className="h-6 w-6" />
               </div>
               <div>
-                <p className="text-xs uppercase tracking-[0.3em] text-slate-400">A venir</p>
+                <p className="text-xs uppercase tracking-[0.3em] text-slate-400">À venir</p>
                 <h1 className="mt-1 text-3xl font-semibold text-white">Tes prochains plans validés</h1>
               </div>
             </div>
             <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-300">
-              Cette page ne garde que les evenements dont une date a ete fixee et qui ne sont pas encore passes.
+              Cette page ne garde que les évènements dont une date a été fixée et qui ne sont pas encore passés.
             </p>
           </div>
 
@@ -60,7 +60,7 @@ export default function UpcomingPage() {
             href="/events"
             className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
           >
-            Voir tous les evenements
+            Voir tous les évènements
             <ArrowRight className="h-4 w-4" />
           </Link>
         </div>
@@ -70,13 +70,13 @@ export default function UpcomingPage() {
         <div className="flex items-center gap-2 text-slate-300">
           <MapPinned className="h-4 w-4" />
           <span className="text-xs uppercase tracking-[0.3em]">Flux</span>
-          <span className="text-sm">{sortedItems.length} evenements a venir</span>
+          <span className="text-sm">{sortedItems.length} évènements à venir</span>
         </div>
 
         <div className="mt-5 grid max-h-[calc(100vh-24rem)] gap-3 overflow-y-auto pr-1">
           {sortedItems.length === 0 ? (
             <p className="rounded-2xl border border-dashed border-white/10 bg-white/5 px-4 py-6 text-sm text-slate-400">
-              Aucun evenement a venir pour le moment. Va dans la page Evenements pour en valider un.
+              Aucun évènement à venir pour le moment. Va dans la page Évènements pour en valider un.
             </p>
           ) : (
             sortedItems.map((item) => (

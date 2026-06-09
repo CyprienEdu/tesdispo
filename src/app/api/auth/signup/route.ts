@@ -5,7 +5,7 @@ import { sendSignupConfirmationEmail } from '@/lib/resend';
 import { createSupabaseAdminClient } from '@/lib/supabase';
 
 export async function POST(request: Request) {
-  let body: { email?: string; password?: string; username?: string };
+  let body: { email?: string; password?: string; username?: string; next?: string };
 
   try {
     body = await request.json();
@@ -16,6 +16,8 @@ export async function POST(request: Request) {
   const email = String(body.email ?? '').trim().toLowerCase();
   const password = String(body.password ?? '');
   const username = String(body.username ?? '').trim();
+  const nextPath = String(body.next ?? '').trim();
+  const safeNextPath = nextPath.startsWith('/') && !nextPath.startsWith('//') ? nextPath : '';
 
   if (!email || !password) {
     return NextResponse.json({ error: 'missing_credentials' }, { status: 400 });
@@ -33,7 +35,7 @@ export async function POST(request: Request) {
       password,
       options: {
         data: username ? { username } : undefined,
-        redirectTo: `${new URL(request.url).origin}/account`
+        redirectTo: `${new URL(request.url).origin}/account${safeNextPath ? `?next=${encodeURIComponent(safeNextPath)}` : ''}`
       }
     });
 

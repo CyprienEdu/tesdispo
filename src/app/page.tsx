@@ -9,12 +9,12 @@ const highlights = [
   {
     icon: Users,
     title: 'Groupes flexibles',
-    description: 'Creer des cercles pour les potes, les voyages ou les plans de derniere minute.'
+    description: 'Créer des cercles pour les potes, les voyages ou les plans de dernière minute.'
   },
   {
     icon: CalendarDays,
     title: 'Calendrier lisible',
-    description: 'Vue mensuelle par defaut, avec navigation semaine et annee pour aller vite.'
+    description: 'Vue mensuelle par défaut, avec navigation semaine et année pour aller vite.'
   },
   {
     icon: CloudSun,
@@ -34,10 +34,10 @@ export default function LandingPage() {
             Sorties entre amis, en mieux
           </div>
           <h1 className="mt-5 text-4xl font-semibold tracking-tight text-white sm:text-6xl">
-            Trouve en un coup d'oeil quand ton groupe est vraiment dispo.
+            Trouve en un coup d&apos;oeil quand ton groupe est vraiment dispo.
           </h1>
           <p className="mt-5 max-w-2xl text-sm leading-7 text-slate-300 sm:text-base">
-            TesDispo transforme les indisponibilites de chacun en un calendrier clair pour
+            TesDispo transforme les indisponibilités de chacun en un calendrier clair pour
             organiser un resto, un week-end ou de vraies vacances ensemble.
           </p>
 
@@ -46,7 +46,7 @@ export default function LandingPage() {
               href={session ? '/upcoming' : '/account'}
               className="inline-flex items-center gap-2 rounded-full bg-emerald-400 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-300"
             >
-              {session ? 'Ouvrir mon espace' : 'Creer mon compte'}
+              {session ? 'Ouvrir mon espace' : 'Créer mon compte'}
               <ArrowRight className="h-4 w-4" />
             </Link>
             <Link
@@ -121,7 +121,7 @@ export default function LandingPage() {
           <div className="mt-4 rounded-[1.5rem] border border-emerald-300/20 bg-emerald-300/10 p-4">
             <p className="text-sm font-medium text-emerald-50">Raccourci de base</p>
             <p className="mt-1 text-sm text-emerald-50/80">
-              Une fois connecte, tu arrives directement sur <span className="font-semibold">A venir</span>.
+              Une fois connecté, tu arrives directement sur <span className="font-semibold">À venir</span>.
             </p>
           </div>
         </div>
@@ -132,21 +132,21 @@ export default function LandingPage() {
           <p className="text-xs uppercase tracking-[0.3em] text-slate-400">1. Groupes</p>
           <h2 className="mt-2 text-xl font-semibold text-white">Organise tes cercles</h2>
           <p className="mt-2 text-sm leading-6 text-slate-300">
-            Cree des groupes petits ou grands, invite des gens et garde tout au meme endroit.
+            Crée des groupes petits ou grands, invite des gens et garde tout au même endroit.
           </p>
         </article>
         <article className="rounded-[1.75rem] border border-white/10 bg-white/5 p-5">
           <p className="text-xs uppercase tracking-[0.3em] text-slate-400">2. Events</p>
           <h2 className="mt-2 text-xl font-semibold text-white">Bats le calendrier</h2>
           <p className="mt-2 text-sm leading-6 text-slate-300">
-            Chaque evenement a sa propre page, ses membres et son calendrier d indisponibilites.
+            Chaque évènement a sa propre page, ses membres et son calendrier d&apos;indisponibilités.
           </p>
         </article>
         <article className="rounded-[1.75rem] border border-white/10 bg-white/5 p-5">
-          <p className="text-xs uppercase tracking-[0.3em] text-slate-400">3. A venir</p>
+          <p className="text-xs uppercase tracking-[0.3em] text-slate-400">3. À venir</p>
           <h2 className="mt-2 text-xl font-semibold text-white">Suis les plans validés</h2>
           <p className="mt-2 text-sm leading-6 text-slate-300">
-            Les sorties datees remontent ici, et les anciens plans disparaissent automatiquement de la vue.
+            Les sorties datées remontent ici, et les anciens plans disparaissent automatiquement de la vue.
           </p>
         </article>
       </section>
@@ -155,7 +155,7 @@ export default function LandingPage() {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Pourquoi maintenant</p>
-            <h2 className="mt-2 text-2xl font-semibold text-white">Une version simple a vendre, puis evolutive</h2>
+            <h2 className="mt-2 text-2xl font-semibold text-white">Une version simple à vendre, puis évolutive</h2>
             <p className="mt-2 text-sm leading-6 text-slate-300">
               On commence par la coordination entre amis, puis on pourra ajouter le chat, la sync
               calendrier et une vraie couche collaborative plus tard.
