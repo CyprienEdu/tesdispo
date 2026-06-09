@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { requireAuth } from '@/lib/api-auth';
+import { getDisplayNames } from '@/lib/display-names';
 import { deleteGroup, getGroupSummary, isSchemaCacheError, updateGroup } from '@/lib/local-store';
 
 type RouteContext = { params: Promise<{ groupId: string }> };
@@ -24,18 +25,33 @@ export async function GET(request: Request, { params }: RouteContext) {
         return NextResponse.json({ error: 'group_not_found' }, { status: 404 });
       }
 
-      return NextResponse.json({ data: localSummary });
+      const displayNames = await getDisplayNames([
+        localSummary.owner_name,
+        ...(localSummary.members ?? []).map((member) => member.member_name),
+        ...(localSummary.events ?? []).map((event) => event.owner_name)
+      ]);
+
+      return NextResponse.json({ data: localSummary, display_names: displayNames });
     }
 
     return NextResponse.json({ error: groupRes.error?.message ?? 'group_not_found' }, { status: 404 });
   }
 
+  const members = membersRes.error && isSchemaCacheError(membersRes.error) ? [] : membersRes.data ?? [];
+  const events = eventsRes.error && isSchemaCacheError(eventsRes.error) ? [] : eventsRes.data ?? [];
+  const displayNames = await getDisplayNames([
+    groupRes.data.owner_name,
+    ...members.map((member) => member.member_name),
+    ...events.map((event) => event.owner_name)
+  ]);
+
   return NextResponse.json({
     data: {
       group: groupRes.data,
-      members: membersRes.error && isSchemaCacheError(membersRes.error) ? [] : membersRes.data ?? [],
-      events: eventsRes.error && isSchemaCacheError(eventsRes.error) ? [] : eventsRes.data ?? []
-    }
+      members,
+      events
+    },
+    display_names: displayNames
   });
 }
 

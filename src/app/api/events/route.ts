@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { requireAuth } from '@/lib/api-auth';
+import { getDisplayNames } from '@/lib/display-names';
 import { createEvent as createLocalEvent, getGroupSummary, isSchemaCacheError, listEventsWithGroupNames } from '@/lib/local-store';
 
 function splitNames(value: unknown) {
@@ -57,7 +58,10 @@ export async function GET(request: Request) {
         return true;
       });
 
-      return NextResponse.json({ data: filtered });
+      return NextResponse.json({
+        data: filtered,
+        display_names: await getDisplayNames(filtered.map((event) => event.owner_name))
+      });
     }
 
     return NextResponse.json({ error: error.message }, { status: 500 });
@@ -69,11 +73,13 @@ export async function GET(request: Request) {
 
   if (groupsRes.error) {
     if (isSchemaCacheError(groupsRes.error)) {
-      return NextResponse.json({
-        data: events.map((event) => ({
+      const fallbackEvents = events.map((event) => ({
           ...event,
           group_name: ''
-        }))
+        }));
+      return NextResponse.json({
+        data: fallbackEvents,
+        display_names: await getDisplayNames(fallbackEvents.map((event) => event.owner_name))
       });
     }
 
@@ -82,11 +88,14 @@ export async function GET(request: Request) {
 
   const groupNameById = new Map((groupsRes.data ?? []).map((group) => [group.id, group.name]));
 
-  return NextResponse.json({
-    data: events.map((event) => ({
+  const mappedEvents = events.map((event) => ({
       ...event,
       group_name: groupNameById.get(event.group_id) ?? ''
-    }))
+    }));
+
+  return NextResponse.json({
+    data: mappedEvents,
+    display_names: await getDisplayNames(mappedEvents.map((event) => event.owner_name))
   });
 }
 
@@ -101,9 +110,15 @@ export async function POST(request: Request) {
     const ownerName = auth.email;
     const memberNames = Array.from(new Set([ownerName, ...splitNames(body.members)]));
     const resolvedAt = String(body.resolved_at ?? '').trim() || null;
+    const availabilityStartTs = String(body.availability_start_ts ?? '').trim() || null;
+    const availabilityEndTs = String(body.availability_end_ts ?? '').trim() || null;
 
     if (!groupId || !name || !ownerName) {
       return NextResponse.json({ error: 'missing_fields' }, { status: 400 });
+    }
+
+    if (availabilityStartTs && availabilityEndTs && new Date(availabilityEndTs) <= new Date(availabilityStartTs)) {
+      return NextResponse.json({ error: 'invalid_availability_window' }, { status: 400 });
     }
 
     const { supabase } = auth;
@@ -123,11 +138,22 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'forbidden' }, { status: 403 });
     }
 
-    const eventInsert = await supabase.from('events').insert({ group_id: groupId, name, owner_name: ownerName, resolved_at: resolvedAt }).select('*').single();
+    const eventInsert = await supabase
+      .from('events')
+      .insert({
+        group_id: groupId,
+        name,
+        owner_name: ownerName,
+        resolved_at: resolvedAt,
+        availability_start_ts: availabilityStartTs,
+        availability_end_ts: availabilityEndTs
+      })
+      .select('*')
+      .single();
 
     if (eventInsert.error || !eventInsert.data) {
       if (eventInsert.error && isSchemaCacheError(eventInsert.error)) {
-        const localEvent = await createLocalEvent(groupId, name, ownerName, resolvedAt, memberNames);
+        const localEvent = await createLocalEvent(groupId, name, ownerName, resolvedAt, memberNames, availabilityStartTs, availabilityEndTs);
         return NextResponse.json({ data: localEvent }, { status: 201 });
       }
 

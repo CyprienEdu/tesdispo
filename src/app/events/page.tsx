@@ -33,9 +33,14 @@ function getEventFilter(item: EventItem): Filter {
   return new Date(item.resolved_at) > now ? 'upcoming' : 'past';
 }
 
+function displayFor(name: string, displayNames: Record<string, string>) {
+  return displayNames[name.toLowerCase()] || name;
+}
+
 export default function EventsPage() {
   const { apiFetch, email } = useAuth();
   const [items, setItems] = useState<EventItem[]>([]);
+  const [displayNames, setDisplayNames] = useState<Record<string, string>>({});
   const [filter, setFilter] = useState<Filter>('all');
 
   useEffect(() => {
@@ -43,7 +48,10 @@ export default function EventsPage() {
 
     void apiFetch('/api/events?status=all', { cache: 'no-store' })
       .then((response) => response.json())
-      .then((json) => setItems(json.data ?? []))
+      .then((json) => {
+        setItems(json.data ?? []);
+        setDisplayNames(json.display_names ?? {});
+      })
       .catch(() => setItems([]));
   }, [apiFetch, email]);
 
@@ -143,7 +151,7 @@ export default function EventsPage() {
                         </span>
                       </div>
                       <p className="mt-1 text-sm text-slate-300">{item.group_name || 'Sans groupe'}</p>
-                      <p className="mt-1 text-xs text-slate-400">Owner: {item.owner_name}</p>
+                      <p className="mt-1 text-xs text-slate-400">Owner: {displayFor(item.owner_name, displayNames)}</p>
                       {item.resolved_at ? (
                         <p className="mt-2 text-sm text-emerald-100">
                           Date: {format(new Date(item.resolved_at), 'dd MMM yyyy HH:mm')}

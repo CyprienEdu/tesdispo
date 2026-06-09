@@ -63,8 +63,8 @@ export function UnavailForm({ groupId }: { groupId: string }) {
       setStart('');
       setEnd('');
       setNote('');
-    } catch (err: any) {
-      setMessage(err?.message ?? 'Erreur');
+    } catch (err) {
+      setMessage(err instanceof Error ? err.message : 'Erreur');
     }
   }
 

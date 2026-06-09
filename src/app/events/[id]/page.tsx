@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { use, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight, CalendarCheck2, Copy, Trash2, UserMinus, UserPlus, Users } from 'lucide-react';
-import { format } from 'date-fns';
+import { addMonths, endOfMonth, format, startOfMonth } from 'date-fns';
 
 import { AvailabilityCalendar, type AvailabilityRange, type CalendarView } from '@/components/availability-calendar';
 import { useAuth } from '@/components/auth-context';
@@ -17,6 +17,8 @@ type EventPayload = {
     owner_name: string;
     resolved_at: string | null;
     archived_at: string | null;
+    availability_start_ts: string | null;
+    availability_end_ts: string | null;
     created_at: string;
   };
   group: { id: string; name: string; owner_name: string } | null;
@@ -59,19 +61,38 @@ function includesName(list: string[], name: string) {
   return list.some((item) => item.toLowerCase() === name.toLowerCase());
 }
 
+function displayFor(name: string, displayNames: Record<string, string>) {
+  return displayNames[name.toLowerCase()] || name;
+}
+
+function monthDays(anchorDate: Date) {
+  const days: Date[] = [];
+  const end = endOfMonth(anchorDate);
+  let cursor = startOfMonth(anchorDate);
+  while (cursor <= end) {
+    days.push(new Date(cursor));
+    cursor = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() + 1);
+  }
+  return days;
+}
+
 export default function EventPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
   const router = useRouter();
   const { apiFetch, email } = useAuth();
   const [payload, setPayload] = useState<EventPayload | null>(null);
+  const [displayNames, setDisplayNames] = useState<Record<string, string>>({});
   const [ranges, setRanges] = useState<AvailabilityRange[]>([]);
   const [periods, setPeriods] = useState<Period[]>([]);
   const [view, setView] = useState<CalendarView>('month');
   const [anchorDate, setAnchorDate] = useState(() => new Date());
+  const [chefMonth, setChefMonth] = useState(() => new Date());
   const [selectedMember, setSelectedMember] = useState('all');
   const [availabilityMode, setAvailabilityMode] = useState<AvailabilityMode>('busy');
   const [memberName, setMemberName] = useState('');
   const [eventDate, setEventDate] = useState('');
+  const [availabilityStart, setAvailabilityStart] = useState('');
+  const [availabilityEnd, setAvailabilityEnd] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const invitePath = `/join/event/${resolvedParams.id}`;
@@ -101,9 +122,12 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
       group: eventJson.data.group ?? null,
       members: eventJson.data.members ?? []
     });
+    setDisplayNames(eventJson.display_names ?? {});
     setRanges(rangesJson.data ?? []);
     setPeriods(periodsJson.periods ?? []);
     setEventDate(toLocalInputValue(eventJson.data.event.resolved_at));
+    setAvailabilityStart(toLocalInputValue(eventJson.data.event.availability_start_ts ?? null));
+    setAvailabilityEnd(toLocalInputValue(eventJson.data.event.availability_end_ts ?? null));
   }
 
   useEffect(() => {
@@ -122,15 +146,32 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
     return ranges.filter((range) => range.member_name.toLowerCase() === selectedMember.toLowerCase());
   }, [canManageEvent, ranges, selectedMember]);
 
-  const selectedPeriods = useMemo(() => {
-    return periods.filter((period) => {
-      if (availabilityMode === 'free') {
-        return selectedMember === 'all' ? period.fullyFree : includesName(period.availableMembers, selectedMember);
-      }
+  const availabilityMinDate = payload?.event.availability_start_ts ? new Date(payload.event.availability_start_ts) : null;
+  const availabilityMaxDate = payload?.event.availability_end_ts ? new Date(payload.event.availability_end_ts) : null;
 
-      return selectedMember === 'all' ? period.blockedCount > 0 : includesName(period.blockedMembers, selectedMember);
+  const monthlyAvailability = useMemo(() => {
+    if (!payload) return [];
+
+    return monthDays(chefMonth).map((day) => {
+      const start = new Date(day);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(start);
+      end.setDate(end.getDate() + 1);
+      const blockedMembers = payload.members
+        .map((member) => member.member_name)
+        .filter((memberName) => ranges.some((range) => range.member_name === memberName && rangeOverlaps(start, end, range)));
+      const availableMembers = payload.members.map((member) => member.member_name).filter((memberName) => !includesName(blockedMembers, memberName));
+
+      return { day, blockedMembers, availableMembers };
     });
-  }, [availabilityMode, periods, selectedMember]);
+  }, [chefMonth, payload, ranges]);
+
+  const selectedMonthlyAvailability = useMemo(() => {
+    return monthlyAvailability.filter((day) => {
+      if (selectedMember === 'all') return day.availableMembers.length > 0;
+      return includesName(day.availableMembers, selectedMember);
+    });
+  }, [monthlyAvailability, selectedMember]);
 
   async function addMember() {
     if (!canManageEvent) return;
@@ -192,8 +233,31 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
     await loadData(view);
   }
 
+  async function saveAvailabilityWindow() {
+    if (!canManageEvent) return;
+
+    const response = await apiFetch(`/api/events/${resolvedParams.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        availability_start_ts: availabilityStart ? new Date(availabilityStart).toISOString() : null,
+        availability_end_ts: availabilityEnd ? new Date(availabilityEnd).toISOString() : null
+      })
+    });
+
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      setMessage(json.error ?? 'Periode invalide.');
+      return;
+    }
+
+    setMessage('Periode mise a jour.');
+    await loadData(view);
+  }
+
   async function deleteEvent() {
     if (!canManageEvent || !payload) return;
+    if (!window.confirm(`Supprimer "${payload.event.name}" ?`)) return;
 
     const response = await apiFetch(`/api/events/${resolvedParams.id}`, { method: 'DELETE' });
     const json = await response.json().catch(() => ({}));
@@ -311,7 +375,7 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
               <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Evenement</p>
               <h1 className="mt-1 text-3xl font-semibold text-white">{payload.event.name}</h1>
               <p className="mt-2 text-sm text-slate-300">
-                Groupe: {payload.group?.name ?? 'Sans groupe'} - Owner: {payload.event.owner_name}
+                Groupe: {payload.group?.name ?? 'Sans groupe'} - Owner: {displayFor(payload.event.owner_name, displayNames)}
               </p>
               {payload.event.resolved_at ? (
                 <p className="mt-2 text-sm text-emerald-100">
@@ -368,6 +432,38 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
             </div>
           ) : null}
 
+          {canManageEvent ? (
+            <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Periode des indispos</p>
+                  <h2 className="mt-1 text-xl font-semibold text-white">Limiter le calendrier</h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={saveAvailabilityWindow}
+                  className="inline-flex items-center gap-2 rounded-full bg-emerald-400 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-300"
+                >
+                  Enregistrer
+                </button>
+              </div>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <input
+                  className="w-full rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-white outline-none focus:border-emerald-300/60"
+                  type="datetime-local"
+                  value={availabilityStart}
+                  onChange={(event) => setAvailabilityStart(event.target.value)}
+                />
+                <input
+                  className="w-full rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-white outline-none focus:border-emerald-300/60"
+                  type="datetime-local"
+                  value={availabilityEnd}
+                  onChange={(event) => setAvailabilityEnd(event.target.value)}
+                />
+              </div>
+            </div>
+          ) : null}
+
           <div className="mt-6">
             <AvailabilityCalendar
               view={view}
@@ -377,6 +473,8 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
               onViewChange={setView}
               onAnchorDateChange={setAnchorDate}
               onCreateRange={createAvailability}
+              minDate={availabilityMinDate}
+              maxDate={availabilityMaxDate}
             />
           </div>
         </article>
@@ -396,7 +494,7 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
             <div className="mt-4 flex flex-wrap gap-2">
               {payload.members.map((member) => (
                 <span key={member.id} className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-sm text-slate-100">
-                  {member.member_name}
+                  {displayFor(member.member_name, displayNames)}
                   {canManageEvent && member.member_name.toLowerCase() !== payload.event.owner_name.toLowerCase() ? (
                     <button
                       type="button"
@@ -463,26 +561,49 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
                 <option value="all">Tous les membres</option>
                 {payload.members.map((member) => (
                   <option key={member.id} value={member.member_name}>
-                    {member.member_name}
+                    {displayFor(member.member_name, displayNames)}
                   </option>
                 ))}
               </select>
+
+              {availabilityMode === 'free' ? (
+                <div className="mt-4 flex items-center justify-between gap-2 rounded-2xl border border-white/10 bg-white/5 p-2">
+                  <button
+                    type="button"
+                    onClick={() => setChefMonth((date) => addMonths(date, -1))}
+                    className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-white transition hover:bg-white/10"
+                  >
+                    Precedent
+                  </button>
+                  <p className="text-sm font-semibold text-white">{format(chefMonth, 'MMMM yyyy')}</p>
+                  <button
+                    type="button"
+                    onClick={() => setChefMonth((date) => addMonths(date, 1))}
+                    className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-white transition hover:bg-white/10"
+                  >
+                    Suivant
+                  </button>
+                </div>
+              ) : null}
 
               <div className="mt-4 max-h-80 space-y-3 overflow-y-auto pr-1">
                 {availabilityMode === 'busy'
                   ? selectedRanges.map((range) => (
                       <div key={range.id} className="rounded-2xl border border-rose-300/20 bg-rose-400/10 px-3 py-2 text-sm text-rose-50">
-                        <p className="font-semibold">{range.member_name}</p>
+                        <p className="font-semibold">{displayFor(range.member_name, displayNames)}</p>
                         <p>{format(new Date(range.start_ts), 'dd MMM HH:mm')} - {format(new Date(range.end_ts), 'dd MMM HH:mm')}</p>
                       </div>
                     ))
-                  : selectedPeriods.map((period) => (
-                      <div key={period.key} className="rounded-2xl border border-emerald-300/20 bg-emerald-300/10 px-3 py-2 text-sm text-emerald-50">
-                        <p className="font-semibold">{period.label}</p>
-                        <p>{format(new Date(period.start), 'dd MMM HH:mm')} - {format(new Date(period.end), 'dd MMM HH:mm')}</p>
+                  : selectedMonthlyAvailability.map((day) => (
+                      <div key={day.day.toISOString()} className="rounded-2xl border border-emerald-300/20 bg-emerald-300/10 px-3 py-2 text-sm text-emerald-50">
+                        <p className="font-semibold">{format(day.day, 'dd MMM yyyy')}</p>
+                        <p>{day.availableMembers.length}/{payload.members.length} dispo</p>
+                        <p className="mt-1 text-xs text-emerald-50/80">
+                          {day.availableMembers.map((member) => displayFor(member, displayNames)).join(', ')}
+                        </p>
                       </div>
                     ))}
-                {(availabilityMode === 'busy' ? selectedRanges : selectedPeriods).length === 0 ? (
+                {(availabilityMode === 'busy' ? selectedRanges : selectedMonthlyAvailability).length === 0 ? (
                   <p className="rounded-2xl border border-dashed border-white/10 bg-white/5 px-4 py-6 text-sm text-slate-400">
                     Aucune donnee.
                   </p>

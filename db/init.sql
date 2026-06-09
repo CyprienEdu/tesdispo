@@ -25,11 +25,22 @@ create table if not exists public.events (
   group_id uuid not null references public.groups(id) on delete cascade,
   name text not null,
   owner_name text not null,
+  availability_start_ts timestamptz,
+  availability_end_ts timestamptz,
   -- resolved_at = date validee pour l evenement
   resolved_at timestamptz,
   archived_at timestamptz,
   created_at timestamptz default now()
 );
+
+alter table public.events
+  drop constraint if exists events_availability_window_valid,
+  add constraint events_availability_window_valid
+    check (
+      availability_start_ts is null
+      or availability_end_ts is null
+      or availability_end_ts > availability_start_ts
+    );
 
 create table if not exists public.event_members (
   id uuid primary key default gen_random_uuid(),
@@ -57,6 +68,7 @@ create index if not exists idx_group_members_group_id on public.group_members(gr
 create index if not exists idx_event_members_event_id on public.event_members(event_id);
 create index if not exists idx_events_group_id on public.events(group_id);
 create index if not exists idx_events_resolved_archived on public.events(resolved_at, archived_at);
+create index if not exists idx_events_availability_window on public.events(availability_start_ts, availability_end_ts);
 create index if not exists idx_availabilities_scope_start_end on public.availabilities(scope_type, scope_id, start_ts, end_ts);
 
 -- Supabase API access (MVP)

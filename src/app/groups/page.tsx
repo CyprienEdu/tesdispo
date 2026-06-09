@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowRight, FolderOpen, Plus, Users } from 'lucide-react';
 
 import { useAuth } from '@/components/auth-context';
@@ -16,15 +16,20 @@ const scopes = [
 
 type Scope = (typeof scopes)[number]['value'];
 
+function displayFor(name: string, displayNames: Record<string, string>) {
+  return displayNames[name.toLowerCase()] || name;
+}
+
 export default function GroupsPage() {
   const { apiFetch, email } = useAuth();
   const [scope, setScope] = useState<Scope>('all');
   const [groups, setGroups] = useState<Group[]>([]);
+  const [displayNames, setDisplayNames] = useState<Record<string, string>>({});
   const [groupName, setGroupName] = useState('');
   const [inviteMembers, setInviteMembers] = useState('');
   const [message, setMessage] = useState('');
 
-  async function refresh() {
+  const refresh = useCallback(async () => {
     if (!email) {
       setGroups([]);
       return;
@@ -37,11 +42,13 @@ export default function GroupsPage() {
     const response = await apiFetch(`/api/groups?${searchParams.toString()}`, { cache: 'no-store' });
     const json = await response.json().catch(() => ({ data: [] }));
     setGroups(json.data ?? []);
-  }
+    setDisplayNames(json.display_names ?? {});
+  }, [apiFetch, email, scope]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void refresh();
-  }, [scope, email]);
+  }, [refresh]);
 
   async function createGroup() {
     if (!email) return;
@@ -178,7 +185,7 @@ export default function GroupsPage() {
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="text-base font-semibold text-white">{group.name}</p>
-                    <p className="mt-1 text-xs text-slate-400">Owner: {group.owner_name}</p>
+                    <p className="mt-1 text-xs text-slate-400">Owner: {displayFor(group.owner_name, displayNames)}</p>
                   </div>
                   <ArrowRight className="h-4 w-4 text-slate-400 transition group-hover:translate-x-0.5 group-hover:text-white" />
                 </div>

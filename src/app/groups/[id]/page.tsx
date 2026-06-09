@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { use, useEffect, useMemo, useState } from 'react';
 import { ArrowRight, CalendarRange, Copy, Trash2, UserMinus, UserPlus, Users } from 'lucide-react';
-import { format } from 'date-fns';
+import { addMonths, endOfMonth, format, startOfMonth } from 'date-fns';
 
 import type { AvailabilityRange } from '@/components/availability-calendar';
 import { useAuth } from '@/components/auth-context';
@@ -18,20 +18,10 @@ type GroupPayload = {
     owner_name: string;
     resolved_at: string | null;
     archived_at: string | null;
+    availability_start_ts: string | null;
+    availability_end_ts: string | null;
     created_at: string;
   }[];
-};
-
-type Period = {
-  key: string;
-  label: string;
-  start: string;
-  end: string;
-  blockedMembers: string[];
-  availableMembers: string[];
-  totalMembers: number;
-  blockedCount: number;
-  fullyFree: boolean;
 };
 
 type AvailabilityMode = 'busy' | 'free';
@@ -40,17 +30,39 @@ function includesName(list: string[], name: string) {
   return list.some((item) => item.toLowerCase() === name.toLowerCase());
 }
 
+function displayFor(name: string, displayNames: Record<string, string>) {
+  return displayNames[name.toLowerCase()] || name;
+}
+
+function rangeOverlaps(start: Date, end: Date, range: AvailabilityRange) {
+  return new Date(range.start_ts) < end && new Date(range.end_ts) > start;
+}
+
+function monthDays(anchorDate: Date) {
+  const days: Date[] = [];
+  const end = endOfMonth(anchorDate);
+  let cursor = startOfMonth(anchorDate);
+  while (cursor <= end) {
+    days.push(new Date(cursor));
+    cursor = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate() + 1);
+  }
+  return days;
+}
+
 export default function GroupPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
   const router = useRouter();
   const { apiFetch, email } = useAuth();
   const [payload, setPayload] = useState<GroupPayload | null>(null);
+  const [displayNames, setDisplayNames] = useState<Record<string, string>>({});
   const [ranges, setRanges] = useState<AvailabilityRange[]>([]);
-  const [periods, setPeriods] = useState<Period[]>([]);
+  const [chefMonth, setChefMonth] = useState(() => new Date());
   const [selectedMember, setSelectedMember] = useState('all');
   const [availabilityMode, setAvailabilityMode] = useState<AvailabilityMode>('busy');
   const [memberName, setMemberName] = useState('');
   const [eventName, setEventName] = useState('');
+  const [eventAvailabilityStart, setEventAvailabilityStart] = useState('');
+  const [eventAvailabilityEnd, setEventAvailabilityEnd] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const invitePath = `/join/group/${resolvedParams.id}`;
@@ -58,15 +70,13 @@ export default function GroupPage({ params }: { params: Promise<{ id: string }> 
   async function load() {
     if (!email) return;
 
-    const [groupRes, rangesRes, periodsRes] = await Promise.all([
+    const [groupRes, rangesRes] = await Promise.all([
       apiFetch(`/api/groups/${resolvedParams.id}`, { cache: 'no-store' }),
-      apiFetch(`/api/availabilities?scope_type=group&scope_id=${resolvedParams.id}`, { cache: 'no-store' }),
-      apiFetch(`/api/groups/${resolvedParams.id}/common-slots?view=week&count=8`, { cache: 'no-store' })
+      apiFetch(`/api/availabilities?scope_type=group&scope_id=${resolvedParams.id}`, { cache: 'no-store' })
     ]);
 
     const groupJson = await groupRes.json().catch(() => ({ data: null, error: 'group_fetch_failed' }));
     const rangesJson = await rangesRes.json().catch(() => ({ data: [] }));
-    const periodsJson = await periodsRes.json().catch(() => ({ periods: [] }));
 
     if (!groupRes.ok || !groupJson?.data?.group) {
       setError(groupJson.error ?? 'Groupe introuvable.');
@@ -76,8 +86,8 @@ export default function GroupPage({ params }: { params: Promise<{ id: string }> 
 
     setError('');
     setPayload(groupJson.data);
+    setDisplayNames(groupJson.display_names ?? {});
     setRanges(rangesJson.data ?? []);
-    setPeriods(periodsJson.periods ?? []);
   }
 
   useEffect(() => {
@@ -102,15 +112,29 @@ export default function GroupPage({ params }: { params: Promise<{ id: string }> 
     return ranges.filter((range) => range.member_name.toLowerCase() === selectedMember.toLowerCase());
   }, [ranges, selectedMember]);
 
-  const selectedPeriods = useMemo(() => {
-    return periods.filter((period) => {
-      if (availabilityMode === 'free') {
-        return selectedMember === 'all' ? period.fullyFree : includesName(period.availableMembers, selectedMember);
-      }
+  const monthlyAvailability = useMemo(() => {
+    if (!payload) return [];
 
-      return selectedMember === 'all' ? period.blockedCount > 0 : includesName(period.blockedMembers, selectedMember);
+    return monthDays(chefMonth).map((day) => {
+      const start = new Date(day);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(start);
+      end.setDate(end.getDate() + 1);
+      const blockedMembers = payload.members
+        .map((member) => member.member_name)
+        .filter((memberName) => ranges.some((range) => range.member_name === memberName && rangeOverlaps(start, end, range)));
+      const availableMembers = payload.members.map((member) => member.member_name).filter((memberName) => !includesName(blockedMembers, memberName));
+
+      return { day, blockedMembers, availableMembers };
     });
-  }, [availabilityMode, periods, selectedMember]);
+  }, [chefMonth, payload, ranges]);
+
+  const selectedMonthlyAvailability = useMemo(() => {
+    return monthlyAvailability.filter((day) => {
+      if (selectedMember === 'all') return day.availableMembers.length > 0;
+      return includesName(day.availableMembers, selectedMember);
+    });
+  }, [monthlyAvailability, selectedMember]);
 
   async function addMember() {
     if (!canManageGroup) return;
@@ -153,7 +177,9 @@ export default function GroupPage({ params }: { params: Promise<{ id: string }> 
       body: JSON.stringify({
         group_id: resolvedParams.id,
         name: eventName,
-        members: payload.members.map((member) => member.member_name)
+        members: payload.members.map((member) => member.member_name),
+        availability_start_ts: eventAvailabilityStart ? new Date(eventAvailabilityStart).toISOString() : null,
+        availability_end_ts: eventAvailabilityEnd ? new Date(eventAvailabilityEnd).toISOString() : null
       })
     });
 
@@ -164,12 +190,16 @@ export default function GroupPage({ params }: { params: Promise<{ id: string }> 
     }
 
     setEventName('');
+    setEventAvailabilityStart('');
+    setEventAvailabilityEnd('');
     setMessage('Evenement cree.');
     await load();
   }
 
   async function deleteEvent(eventId: string) {
     if (!canManageGroup) return;
+    const event = payload?.events.find((item) => item.id === eventId);
+    if (!window.confirm(`Supprimer "${event?.name ?? 'cet evenement'}" ?`)) return;
 
     const response = await apiFetch(`/api/events/${eventId}`, { method: 'DELETE' });
     const json = await response.json().catch(() => ({}));
@@ -179,6 +209,7 @@ export default function GroupPage({ params }: { params: Promise<{ id: string }> 
 
   async function deleteGroup() {
     if (!canManageGroup) return;
+    if (!window.confirm(`Supprimer "${payload?.group.name ?? 'ce groupe'}" ?`)) return;
 
     const response = await apiFetch(`/api/groups/${resolvedParams.id}`, { method: 'DELETE' });
     const json = await response.json().catch(() => ({}));
@@ -241,7 +272,7 @@ export default function GroupPage({ params }: { params: Promise<{ id: string }> 
           </div>
 
           <p className="mt-4 text-sm leading-6 text-slate-300">
-            Owner: {payload.group.owner_name}
+            Owner: {displayFor(payload.group.owner_name, displayNames)}
           </p>
 
           <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-4">
@@ -249,7 +280,7 @@ export default function GroupPage({ params }: { params: Promise<{ id: string }> 
             <div className="mt-3 flex flex-wrap gap-2">
               {payload.members.map((member) => (
                 <span key={member.id} className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-slate-900/60 px-3 py-1 text-sm text-slate-100">
-                  {member.member_name}
+                  {displayFor(member.member_name, displayNames)}
                   {canManageGroup && member.member_name.toLowerCase() !== payload.group.owner_name.toLowerCase() ? (
                     <button
                       type="button"
@@ -319,26 +350,49 @@ export default function GroupPage({ params }: { params: Promise<{ id: string }> 
                 <option value="all">Tous les membres</option>
                 {payload.members.map((member) => (
                   <option key={member.id} value={member.member_name}>
-                    {member.member_name}
+                    {displayFor(member.member_name, displayNames)}
                   </option>
                 ))}
               </select>
+
+              {availabilityMode === 'free' ? (
+                <div className="mt-4 flex items-center justify-between gap-2 rounded-2xl border border-white/10 bg-white/5 p-2">
+                  <button
+                    type="button"
+                    onClick={() => setChefMonth((date) => addMonths(date, -1))}
+                    className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-white transition hover:bg-white/10"
+                  >
+                    Precedent
+                  </button>
+                  <p className="text-sm font-semibold text-white">{format(chefMonth, 'MMMM yyyy')}</p>
+                  <button
+                    type="button"
+                    onClick={() => setChefMonth((date) => addMonths(date, 1))}
+                    className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-white transition hover:bg-white/10"
+                  >
+                    Suivant
+                  </button>
+                </div>
+              ) : null}
 
               <div className="mt-4 max-h-72 space-y-2 overflow-y-auto pr-1">
                 {availabilityMode === 'busy'
                   ? selectedRanges.map((range) => (
                       <div key={range.id} className="rounded-xl border border-rose-300/20 bg-rose-400/10 px-3 py-2 text-sm text-rose-50">
-                        <p className="font-semibold">{range.member_name}</p>
+                        <p className="font-semibold">{displayFor(range.member_name, displayNames)}</p>
                         <p>{format(new Date(range.start_ts), 'dd MMM HH:mm')} - {format(new Date(range.end_ts), 'dd MMM HH:mm')}</p>
                       </div>
                     ))
-                  : selectedPeriods.map((period) => (
-                      <div key={period.key} className="rounded-xl border border-emerald-300/20 bg-emerald-300/10 px-3 py-2 text-sm text-emerald-50">
-                        <p className="font-semibold">{period.label}</p>
-                        <p>{format(new Date(period.start), 'dd MMM HH:mm')} - {format(new Date(period.end), 'dd MMM HH:mm')}</p>
+                  : selectedMonthlyAvailability.map((day) => (
+                      <div key={day.day.toISOString()} className="rounded-xl border border-emerald-300/20 bg-emerald-300/10 px-3 py-2 text-sm text-emerald-50">
+                        <p className="font-semibold">{format(day.day, 'dd MMM yyyy')}</p>
+                        <p>{day.availableMembers.length}/{payload.members.length} dispo</p>
+                        <p className="mt-1 text-xs text-emerald-50/80">
+                          {day.availableMembers.map((member) => displayFor(member, displayNames)).join(', ')}
+                        </p>
                       </div>
                     ))}
-                {(availabilityMode === 'busy' ? selectedRanges : selectedPeriods).length === 0 ? (
+                {(availabilityMode === 'busy' ? selectedRanges : selectedMonthlyAvailability).length === 0 ? (
                   <p className="rounded-xl border border-dashed border-white/10 px-3 py-4 text-sm text-slate-400">Aucune donnee.</p>
                 ) : null}
               </div>
@@ -367,6 +421,20 @@ export default function GroupPage({ params }: { params: Promise<{ id: string }> 
                 value={eventName}
                 onChange={(event) => setEventName(event.target.value)}
               />
+              <div className="grid gap-3 sm:grid-cols-2">
+                <input
+                  className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none focus:border-emerald-300/60"
+                  type="datetime-local"
+                  value={eventAvailabilityStart}
+                  onChange={(event) => setEventAvailabilityStart(event.target.value)}
+                />
+                <input
+                  className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none focus:border-emerald-300/60"
+                  type="datetime-local"
+                  value={eventAvailabilityEnd}
+                  onChange={(event) => setEventAvailabilityEnd(event.target.value)}
+                />
+              </div>
               <button
                 type="button"
                 onClick={createEvent}
@@ -396,7 +464,7 @@ export default function GroupPage({ params }: { params: Promise<{ id: string }> 
                             {isUpcoming ? 'A venir' : event.resolved_at ? 'Passe' : 'A planifier'}
                           </span>
                         </div>
-                        <p className="mt-1 text-sm text-slate-300">Owner: {event.owner_name}</p>
+                        <p className="mt-1 text-sm text-slate-300">Owner: {displayFor(event.owner_name, displayNames)}</p>
                         {event.resolved_at ? (
                           <p className="mt-2 text-sm text-emerald-100">
                             {format(new Date(event.resolved_at), 'dd MMM yyyy HH:mm')}

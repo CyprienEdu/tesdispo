@@ -24,6 +24,8 @@ type EventItem = {
   owner_name: string;
   resolved_at: string | null;
   archived_at: string | null;
+  availability_start_ts?: string | null;
+  availability_end_ts?: string | null;
   created_at: string;
 };
 
@@ -248,7 +250,15 @@ export async function listEventMembers(eventId: string) {
     .sort((left, right) => left.created_at.localeCompare(right.created_at));
 }
 
-export async function createEvent(groupId: string, name: string, ownerName: string, resolvedAt: string | null, memberNames: string[]) {
+export async function createEvent(
+  groupId: string,
+  name: string,
+  ownerName: string,
+  resolvedAt: string | null,
+  memberNames: string[],
+  availabilityStartTs: string | null = null,
+  availabilityEndTs: string | null = null
+) {
   return mutate(async (state) => {
     const event: EventItem = {
       id: createId(),
@@ -257,6 +267,8 @@ export async function createEvent(groupId: string, name: string, ownerName: stri
       owner_name: ownerName,
       resolved_at: resolvedAt,
       archived_at: null,
+      availability_start_ts: availabilityStartTs,
+      availability_end_ts: availabilityEndTs,
       created_at: nowIso()
     };
 
@@ -420,13 +432,15 @@ export async function deleteEvent(eventId: string) {
   });
 }
 
-export async function updateEvent(eventId: string, payload: { name?: string; resolved_at?: string | null; archived_at?: string | null }) {
+export async function updateEvent(eventId: string, payload: { name?: string; resolved_at?: string | null; archived_at?: string | null; availability_start_ts?: string | null; availability_end_ts?: string | null }) {
   return mutate(async (state) => {
     const event = state.events.find((item) => item.id === eventId);
     if (!event) return null;
     if (payload.name !== undefined) event.name = payload.name;
     if (payload.resolved_at !== undefined) event.resolved_at = payload.resolved_at;
     if (payload.archived_at !== undefined) event.archived_at = payload.archived_at;
+    if (payload.availability_start_ts !== undefined) event.availability_start_ts = payload.availability_start_ts;
+    if (payload.availability_end_ts !== undefined) event.availability_end_ts = payload.availability_end_ts;
     return event;
   });
 }

@@ -24,7 +24,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState<Session | null>(null);
 
-  async function refreshSession() {
+  const refreshSession = useCallback(async () => {
     if (!configured) {
       setLoading(false);
       return;
@@ -34,14 +34,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data } = await supabase.auth.getSession();
     setSession(data.session ?? null);
     setLoading(false);
-  }
+  }, [configured]);
 
-  async function signOut() {
+  const signOut = useCallback(async () => {
     if (!configured) return;
     const supabase = createSupabaseBrowserClient();
     await supabase.auth.signOut();
     setSession(null);
-  }
+  }, [configured]);
 
   const apiFetch = useCallback(async (input: RequestInfo | URL, init: RequestInit = {}) => {
     if (!configured) {
@@ -60,8 +60,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [configured]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void refreshSession();
-  }, [configured]);
+  }, [refreshSession]);
 
   useEffect(() => {
     if (!configured) return;
@@ -91,7 +92,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       signOut,
       apiFetch
     };
-  }, [apiFetch, configured, loading, session]);
+  }, [apiFetch, configured, loading, refreshSession, session, signOut]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

@@ -33,7 +33,6 @@ export function Chrome({ children }: { children: React.ReactNode }) {
   const isInviteRoute = pathname.startsWith('/join/');
   const isPublicRoute = pathname === '/' || pathname === '/account' || isInviteRoute;
   const isLanding = pathname === '/';
-  const isAccount = pathname === '/account';
   const isProtected = !isPublicRoute;
 
   useEffect(() => {
@@ -47,7 +46,7 @@ export function Chrome({ children }: { children: React.ReactNode }) {
     if (isProtected && !session) {
       router.replace(`/account?next=${encodeURIComponent(pathname)}`);
     }
-  }, [isLanding, isProtected, loading, router, session]);
+  }, [isLanding, isProtected, loading, pathname, router, session]);
 
   const accountLabel = displayName || email || 'Compte';
   const accountInitials = useMemo(() => initials(accountLabel), [accountLabel]);
@@ -65,14 +64,14 @@ export function Chrome({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top,rgba(124,247,194,0.15),transparent_34%),radial-gradient(circle_at_right,rgba(38,99,77,0.2),transparent_28%),linear-gradient(180deg,#06110f_0%,#081512_100%)] text-slate-50">
       <header className="sticky top-0 z-40 border-b border-white/10 bg-slate-950/50 backdrop-blur-xl">
-        <div className="mx-auto flex h-20 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
-          <Link href={session ? '/upcoming' : '/'} className="group flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-emerald-300/30 bg-emerald-300/10 text-emerald-100 shadow-lg shadow-emerald-950/20">
+        <div className="mx-auto flex h-20 max-w-7xl items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
+          <Link href={session ? '/upcoming' : '/'} className="group flex min-w-0 items-center gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-emerald-300/30 bg-emerald-300/10 text-emerald-100 shadow-lg shadow-emerald-950/20">
               <LayoutGrid className="h-5 w-5" />
             </div>
-            <div>
+            <div className="min-w-0">
               <p className="text-sm font-semibold text-white">TesDispo</p>
-              <p className="text-xs text-slate-400">Sorties, events et calendrier de groupe</p>
+              <p className="line-clamp-2 text-xs leading-4 text-slate-400">Sorties, events et calendrier de groupe</p>
             </div>
           </Link>
 
@@ -171,6 +170,27 @@ export function Chrome({ children }: { children: React.ReactNode }) {
               </Link>
             </div>
           </div>
+        ) : null}
+
+        {session && pathname !== '/' ? (
+          <nav className="grid grid-cols-3 gap-1 border-t border-white/10 bg-slate-950/70 px-2 py-2 md:hidden">
+            {appNav.map((item) => {
+              const Icon = item.icon;
+              const active = isActive(pathname, item.href);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`flex flex-col items-center gap-1 rounded-xl px-2 py-2 text-[11px] font-medium transition ${
+                    active ? 'bg-emerald-400 text-slate-950' : 'text-slate-300 hover:bg-white/10 hover:text-white'
+                  }`}
+                >
+                  <Icon className="h-4 w-4" />
+                  {item.label}
+                </Link>
+              );
+            })}
+          </nav>
         ) : null}
       </header>
 

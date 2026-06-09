@@ -3,6 +3,7 @@ import { requireAuth } from '@/lib/api-auth';
 import {
   createAvailability as createLocalAvailability,
   deleteAvailabilities as deleteLocalAvailabilities,
+  getEvent,
   isSchemaCacheError,
   listAvailabilities
 } from '@/lib/local-store';
@@ -73,6 +74,34 @@ export async function POST(request: Request) {
     }
 
     const { supabase } = auth;
+
+    if (scopeType === 'event') {
+      const eventRes = await supabase
+        .from('events')
+        .select('availability_start_ts,availability_end_ts')
+        .eq('id', scopeId)
+        .single();
+
+      if (eventRes.error) {
+        if (isSchemaCacheError(eventRes.error)) {
+          const localEvent = await getEvent(scopeId);
+          const windowStart = localEvent?.availability_start_ts ? new Date(localEvent.availability_start_ts) : null;
+          const windowEnd = localEvent?.availability_end_ts ? new Date(localEvent.availability_end_ts) : null;
+          if ((windowStart && new Date(startTs) < windowStart) || (windowEnd && new Date(endTs) > windowEnd)) {
+            return NextResponse.json({ error: 'outside_event_window' }, { status: 400 });
+          }
+        } else {
+          return NextResponse.json({ error: eventRes.error.message }, { status: 500 });
+        }
+      } else {
+        const windowStart = eventRes.data?.availability_start_ts ? new Date(eventRes.data.availability_start_ts) : null;
+        const windowEnd = eventRes.data?.availability_end_ts ? new Date(eventRes.data.availability_end_ts) : null;
+        if ((windowStart && new Date(startTs) < windowStart) || (windowEnd && new Date(endTs) > windowEnd)) {
+          return NextResponse.json({ error: 'outside_event_window' }, { status: 400 });
+        }
+      }
+    }
+
     const { data, error } = await supabase
       .from('availabilities')
       .insert({

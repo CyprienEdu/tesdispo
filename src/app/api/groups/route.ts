@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { requireAuth } from '@/lib/api-auth';
+import { getDisplayNames } from '@/lib/display-names';
 import {
   createGroup as createLocalGroup,
   isSchemaCacheError,
@@ -40,20 +41,22 @@ export async function GET(request: Request) {
 
     if (error) {
       if (isSchemaCacheError(error)) {
-        return NextResponse.json({ data: await listGroupsByOwner(ownerName) });
+        const groups = await listGroupsByOwner(ownerName);
+        return NextResponse.json({ data: groups, display_names: await getDisplayNames(groups.map((group) => group.owner_name)) });
       }
 
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ data });
+    return NextResponse.json({ data, display_names: await getDisplayNames((data ?? []).map((group) => group.owner_name)) });
   }
 
   if (scope === 'invited' && memberName) {
     const membersRes = await supabase.from('group_members').select('group_id').eq('member_name', memberName);
     if (membersRes.error) {
       if (isSchemaCacheError(membersRes.error)) {
-        return NextResponse.json({ data: await listGroupsByMember(memberName) });
+        const groups = await listGroupsByMember(memberName);
+        return NextResponse.json({ data: groups, display_names: await getDisplayNames(groups.map((group) => group.owner_name)) });
       }
 
       return NextResponse.json({ error: membersRes.error.message }, { status: 500 });
@@ -73,26 +76,28 @@ export async function GET(request: Request) {
 
     if (error) {
       if (isSchemaCacheError(error)) {
-        return NextResponse.json({ data: await listGroupsByMember(memberName) });
+        const groups = await listGroupsByMember(memberName);
+        return NextResponse.json({ data: groups, display_names: await getDisplayNames(groups.map((group) => group.owner_name)) });
       }
 
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ data });
+    return NextResponse.json({ data, display_names: await getDisplayNames((data ?? []).map((group) => group.owner_name)) });
   }
 
   const { data, error } = await supabase.from('groups').select('*').order('created_at', { ascending: false });
 
   if (error) {
     if (isSchemaCacheError(error)) {
-      return NextResponse.json({ data: await listGroups() });
+      const groups = await listGroups();
+      return NextResponse.json({ data: groups, display_names: await getDisplayNames(groups.map((group) => group.owner_name)) });
     }
 
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ data });
+  return NextResponse.json({ data, display_names: await getDisplayNames((data ?? []).map((group) => group.owner_name)) });
 }
 
 export async function POST(request: Request) {

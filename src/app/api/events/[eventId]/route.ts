@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import { requireAuth } from '@/lib/api-auth';
+import { getDisplayNames } from '@/lib/display-names';
 import { deleteEvent as deleteLocalEvent, getEventSummary, isSchemaCacheError, updateEvent as updateLocalEvent } from '@/lib/local-store';
 
 type RouteContext = { params: Promise<{ eventId: string }> };
@@ -53,12 +54,19 @@ export async function GET(request: Request, { params }: RouteContext) {
         return NextResponse.json({ error: 'event_not_found' }, { status: 404 });
       }
 
+      const displayNames = await getDisplayNames([
+        localSummary.owner_name,
+        localSummary.group_owner_name ?? '',
+        ...(localSummary.members ?? []).map((member) => member.member_name)
+      ]);
+
       return NextResponse.json({
         data: {
           event: localSummary,
           group: { id: localSummary.group_id, name: localSummary.group_name ?? '', owner_name: localSummary.owner_name },
           members: localSummary.members ?? []
-        }
+        },
+        display_names: displayNames
       });
     }
 
@@ -66,13 +74,21 @@ export async function GET(request: Request, { params }: RouteContext) {
   }
 
   const groupRes = await supabase.from('groups').select('id,name,owner_name').eq('id', eventRes.data.group_id).single();
+  const group = groupRes.error && isSchemaCacheError(groupRes.error) ? null : groupRes.data ?? null;
+  const members = membersRes.error && isSchemaCacheError(membersRes.error) ? [] : membersRes.data ?? [];
+  const displayNames = await getDisplayNames([
+    eventRes.data.owner_name,
+    group?.owner_name ?? '',
+    ...members.map((member) => member.member_name)
+  ]);
 
   return NextResponse.json({
     data: {
       event: eventRes.data,
-      group: groupRes.error && isSchemaCacheError(groupRes.error) ? null : groupRes.data ?? null,
-      members: membersRes.error && isSchemaCacheError(membersRes.error) ? [] : membersRes.data ?? []
-    }
+      group,
+      members
+    },
+    display_names: displayNames
   });
 }
 
@@ -86,9 +102,21 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     const name = String(body.name ?? '').trim();
     const resolvedAt = body.resolved_at === null ? null : String(body.resolved_at ?? '').trim() || null;
     const archivedAt = body.archived_at === null ? null : String(body.archived_at ?? '').trim() || null;
+    const availabilityStartTs = body.availability_start_ts === null ? null : String(body.availability_start_ts ?? '').trim() || null;
+    const availabilityEndTs = body.availability_end_ts === null ? null : String(body.availability_end_ts ?? '').trim() || null;
 
-    if (!name && resolvedAt === null && archivedAt === null) {
+    if (
+      !name &&
+      body.resolved_at === undefined &&
+      body.archived_at === undefined &&
+      body.availability_start_ts === undefined &&
+      body.availability_end_ts === undefined
+    ) {
       return NextResponse.json({ error: 'missing_fields' }, { status: 400 });
+    }
+
+    if (availabilityStartTs && availabilityEndTs && new Date(availabilityEndTs) <= new Date(availabilityStartTs)) {
+      return NextResponse.json({ error: 'invalid_availability_window' }, { status: 400 });
     }
 
     const { supabase } = auth;
@@ -105,6 +133,8 @@ export async function PATCH(request: Request, { params }: RouteContext) {
     if (name) payload.name = name;
     if (body.resolved_at !== undefined) payload.resolved_at = resolvedAt;
     if (body.archived_at !== undefined) payload.archived_at = archivedAt;
+    if (body.availability_start_ts !== undefined) payload.availability_start_ts = availabilityStartTs;
+    if (body.availability_end_ts !== undefined) payload.availability_end_ts = availabilityEndTs;
 
     const { data, error } = await supabase.from('events').update(payload).eq('id', eventId).select('*').single();
 

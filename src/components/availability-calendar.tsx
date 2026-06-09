@@ -33,6 +33,8 @@ type Props = {
   onViewChange: (view: CalendarView) => void;
   onAnchorDateChange: (nextDate: Date) => void;
   onCreateRange: (start: Date, end: Date) => Promise<void> | void;
+  minDate?: Date | null;
+  maxDate?: Date | null;
 };
 
 function normalizeDay(date: Date) {
@@ -47,6 +49,14 @@ function dayLabel(date: Date) {
 
 function isPastDate(date: Date) {
   return normalizeDay(date).getTime() < normalizeDay(new Date()).getTime();
+}
+
+function isBeforeLimit(date: Date, minDate?: Date | null) {
+  return minDate ? normalizeDay(date).getTime() < normalizeDay(minDate).getTime() : false;
+}
+
+function isAfterLimit(date: Date, maxDate?: Date | null) {
+  return maxDate ? normalizeDay(date).getTime() > normalizeDay(maxDate).getTime() : false;
 }
 
 function rangeOverlapsDay(range: AvailabilityRange, date: Date) {
@@ -65,7 +75,9 @@ export function AvailabilityCalendar({
   currentMemberName,
   onViewChange,
   onAnchorDateChange,
-  onCreateRange
+  onCreateRange,
+  minDate,
+  maxDate
 }: Props) {
   const [dragStart, setDragStart] = useState<Date | null>(null);
   const [dragCurrent, setDragCurrent] = useState<Date | null>(null);
@@ -124,13 +136,13 @@ export function AvailabilityCalendar({
   }, [dragCurrent, dragStart, onCreateRange]);
 
   function setRange(date: Date) {
-    if (isPastDate(date)) return;
+    if (isPastDate(date) || isBeforeLimit(date, minDate) || isAfterLimit(date, maxDate)) return;
     setDragStart(date);
     setDragCurrent(date);
   }
 
   function extendRange(date: Date) {
-    if (!dragStart || isPastDate(date)) return;
+    if (!dragStart || isPastDate(date) || isBeforeLimit(date, minDate) || isAfterLimit(date, maxDate)) return;
     setDragCurrent(date);
   }
 
@@ -144,7 +156,7 @@ export function AvailabilityCalendar({
         ? date >= normalizeDay(dragStart < dragCurrent ? dragStart : dragCurrent) &&
           date <= normalizeDay(dragStart > dragCurrent ? dragStart : dragCurrent)
         : false;
-    const past = isPastDate(date) && !isSameDay(date, today);
+    const past = (isPastDate(date) && !isSameDay(date, today)) || isBeforeLimit(date, minDate) || isAfterLimit(date, maxDate);
 
     return (
       <button
@@ -152,8 +164,10 @@ export function AvailabilityCalendar({
         type="button"
         onMouseDown={() => setRange(date)}
         onMouseEnter={() => extendRange(date)}
+        onTouchStart={() => setRange(date)}
+        onTouchMove={() => extendRange(date)}
         disabled={past}
-        className={`group min-h-24 rounded-2xl border p-3 text-left transition ${
+        className={`group min-h-[4.75rem] rounded-lg border p-1.5 text-left transition sm:min-h-24 sm:rounded-2xl sm:p-3 ${
           past
             ? 'cursor-not-allowed border-white/5 bg-white/3 text-slate-500'
             : selected
@@ -166,29 +180,29 @@ export function AvailabilityCalendar({
         }`}
       >
         <div className="flex items-start justify-between gap-2">
-          <div>
-            <p className="text-xs uppercase tracking-[0.25em] text-current/60">{dayLabel(date)}</p>
-            <p className="mt-2 text-lg font-semibold">{format(date, 'd')}</p>
+          <div className="min-w-0">
+            <p className="truncate text-[9px] uppercase tracking-[0.08em] text-current/60 sm:text-xs sm:tracking-[0.25em]">{dayLabel(date)}</p>
+            <p className="mt-1 text-base font-semibold sm:mt-2 sm:text-lg">{format(date, 'd')}</p>
           </div>
           {isSameDay(date, today) ? (
-            <span className="rounded-full border border-emerald-300/30 bg-emerald-300/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.25em] text-emerald-100">
+            <span className="hidden rounded-full border border-emerald-300/30 bg-emerald-300/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.25em] text-emerald-100 sm:inline-flex">
               Today
             </span>
           ) : null}
         </div>
 
-        <div className="mt-3 flex flex-wrap gap-1">
+        <div className="mt-2 flex flex-wrap gap-1 sm:mt-3">
           {blocked ? (
-            <span className="rounded-full border border-white/10 bg-slate-950/30 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.2em]">
+            <span className="max-w-full truncate rounded-full border border-white/10 bg-slate-950/30 px-1.5 py-1 text-[9px] font-semibold uppercase tracking-[0.08em] sm:px-2 sm:text-[10px] sm:tracking-[0.2em]">
               {ownedRanges.length > 0 ? 'Your busy' : 'Busy'}
             </span>
           ) : (
-            <span className="rounded-full border border-white/10 bg-slate-950/30 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.2em]">
+            <span className="max-w-full truncate rounded-full border border-white/10 bg-slate-950/30 px-1.5 py-1 text-[9px] font-semibold uppercase tracking-[0.08em] sm:px-2 sm:text-[10px] sm:tracking-[0.2em]">
               Free
             </span>
           )}
           {otherRanges.length > 0 ? (
-            <span className="rounded-full border border-white/10 bg-slate-950/30 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.2em]">
+            <span className="max-w-full truncate rounded-full border border-white/10 bg-slate-950/30 px-1.5 py-1 text-[9px] font-semibold uppercase tracking-[0.08em] sm:px-2 sm:text-[10px] sm:tracking-[0.2em]">
               {otherRanges.length} guest(s)
             </span>
           ) : null}
@@ -199,29 +213,44 @@ export function AvailabilityCalendar({
 
   const canGoBack =
     view === 'month'
-      ? startOfMonth(anchorDate).getTime() > startOfMonth(today).getTime()
+      ? startOfMonth(anchorDate).getTime() > Math.max(startOfMonth(today).getTime(), minDate ? startOfMonth(minDate).getTime() : 0)
       : view === 'week'
-        ? startOfWeek(anchorDate, { weekStartsOn: 1 }).getTime() > startOfWeek(today, { weekStartsOn: 1 }).getTime()
-        : startOfYear(anchorDate).getTime() > startOfYear(today).getTime();
+        ? startOfWeek(anchorDate, { weekStartsOn: 1 }).getTime() >
+          Math.max(startOfWeek(today, { weekStartsOn: 1 }).getTime(), minDate ? startOfWeek(minDate, { weekStartsOn: 1 }).getTime() : 0)
+        : startOfYear(anchorDate).getTime() > Math.max(startOfYear(today).getTime(), minDate ? startOfYear(minDate).getTime() : 0);
+
+  const canGoForward =
+    !maxDate ||
+    (view === 'month'
+      ? startOfMonth(addMonths(anchorDate, 1)).getTime() <= startOfMonth(maxDate).getTime()
+      : view === 'week'
+        ? startOfWeek(addDays(anchorDate, 7), { weekStartsOn: 1 }).getTime() <= startOfWeek(maxDate, { weekStartsOn: 1 }).getTime()
+        : startOfYear(addYears(anchorDate, 1)).getTime() <= startOfYear(maxDate).getTime());
 
   function move(delta: number) {
     if (view === 'month') {
       const nextDate = addMonths(anchorDate, delta);
       if (startOfMonth(nextDate).getTime() < startOfMonth(today).getTime()) return;
+      if (minDate && endOfMonth(nextDate).getTime() < normalizeDay(minDate).getTime()) return;
+      if (maxDate && startOfMonth(nextDate).getTime() > normalizeDay(maxDate).getTime()) return;
       onAnchorDateChange(nextDate);
     } else if (view === 'week') {
       const nextDate = addDays(anchorDate, delta * 7);
       if (startOfWeek(nextDate, { weekStartsOn: 1 }).getTime() < startOfWeek(today, { weekStartsOn: 1 }).getTime()) return;
+      if (minDate && endOfWeek(nextDate, { weekStartsOn: 1 }).getTime() < normalizeDay(minDate).getTime()) return;
+      if (maxDate && startOfWeek(nextDate, { weekStartsOn: 1 }).getTime() > normalizeDay(maxDate).getTime()) return;
       onAnchorDateChange(nextDate);
     } else {
       const nextDate = addYears(anchorDate, delta);
       if (startOfYear(nextDate).getTime() < startOfYear(today).getTime()) return;
+      if (minDate && new Date(nextDate.getFullYear(), 11, 31).getTime() < normalizeDay(minDate).getTime()) return;
+      if (maxDate && startOfYear(nextDate).getTime() > normalizeDay(maxDate).getTime()) return;
       onAnchorDateChange(nextDate);
     }
   }
 
   return (
-    <section className="rounded-[2rem] border border-white/10 bg-slate-950/60 p-5 shadow-2xl shadow-black/30 backdrop-blur-xl">
+    <section className="rounded-2xl border border-white/10 bg-slate-950/60 p-3 shadow-2xl shadow-black/30 backdrop-blur-xl sm:p-5">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Calendrier</p>
@@ -243,7 +272,7 @@ export function AvailabilityCalendar({
               key={item}
               type="button"
               onClick={() => onViewChange(item)}
-              className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+              className={`rounded-full px-3 py-2 text-sm font-semibold transition sm:px-4 ${
                 view === item
                   ? 'bg-emerald-400 text-slate-950'
                   : 'border border-white/10 bg-white/5 text-slate-100 hover:bg-white/10'
@@ -265,7 +294,8 @@ export function AvailabilityCalendar({
             <button
               type="button"
               onClick={() => move(1)}
-              className="rounded-full border border-white/10 bg-white/5 p-2 text-white transition hover:bg-white/10"
+              disabled={!canGoForward}
+              className="rounded-full border border-white/10 bg-white/5 p-2 text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
             >
               <ChevronRight className="h-4 w-4" />
             </button>
@@ -274,13 +304,13 @@ export function AvailabilityCalendar({
       </div>
 
       {view === 'month' ? (
-        <div className="mt-5">
-          <div className="grid grid-cols-7 gap-2 text-center text-xs uppercase tracking-[0.25em] text-slate-400">
+        <div className="mt-4 sm:mt-5">
+          <div className="grid grid-cols-7 gap-1 text-center text-[10px] uppercase tracking-[0.08em] text-slate-400 sm:gap-2 sm:text-xs sm:tracking-[0.25em]">
             {['L', 'M', 'M', 'J', 'V', 'S', 'D'].map((day, index) => (
               <span key={`${day}-${index}`}>{day}</span>
             ))}
           </div>
-          <div className="mt-3 grid grid-cols-7 gap-2">
+          <div className="mt-2 grid grid-cols-7 gap-1 sm:mt-3 sm:gap-2">
             {orderedMonthDates.map(renderDayCell)}
           </div>
         </div>
@@ -295,7 +325,10 @@ export function AvailabilityCalendar({
       {view === 'year' ? (
         <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {yearMonths.map((monthDate) => {
-            const disabled = isPastDate(endOfMonth(monthDate));
+            const disabled =
+              isPastDate(endOfMonth(monthDate)) ||
+              (minDate ? endOfMonth(monthDate).getTime() < normalizeDay(minDate).getTime() : false) ||
+              (maxDate ? startOfMonth(monthDate).getTime() > normalizeDay(maxDate).getTime() : false);
             const hasBusy = ranges.some((range) => {
               const monthStart = startOfMonth(monthDate);
               const monthEnd = endOfMonth(monthDate);

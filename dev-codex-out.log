@@ -6,9 +6,5 @@
 - Local:         http://localhost:3001
 - Network:       http://192.168.1.24:3001
 - Environments: .env.local
-✓ Ready in 1285ms
-
-○ Compiling / ...
- GET / 200 in 7.0s (next.js: 6.3s, application-code: 686ms)
- GET / 200 in 102ms (next.js: 13ms, application-code: 89ms)
+✓ Ready in 1170ms
 [?25h
