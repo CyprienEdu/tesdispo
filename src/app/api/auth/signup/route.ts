@@ -18,6 +18,7 @@ export async function POST(request: Request) {
   const username = String(body.username ?? '').trim();
   const nextPath = String(body.next ?? '').trim();
   const safeNextPath = nextPath.startsWith('/') && !nextPath.startsWith('//') ? nextPath : '';
+  const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL ?? new URL(request.url).origin).replace(/\/$/, '');
 
   if (!email || !password) {
     return NextResponse.json({ error: 'missing_credentials' }, { status: 400 });
@@ -35,7 +36,7 @@ export async function POST(request: Request) {
       password,
       options: {
         data: username ? { username } : undefined,
-        redirectTo: `${new URL(request.url).origin}/account${safeNextPath ? `?next=${encodeURIComponent(safeNextPath)}` : ''}`
+        redirectTo: `${siteUrl}/account${safeNextPath ? `?next=${encodeURIComponent(safeNextPath)}` : ''}`
       }
     });
 

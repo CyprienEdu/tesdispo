@@ -14,7 +14,8 @@ function getResend() {
 }
 
 function getFromAddress() {
-  return process.env.RESEND_FROM_EMAIL ?? 'TesDispo <onboarding@resend.dev>';
+  const configuredFrom = process.env.RESEND_FROM_EMAIL?.trim().replace(/^["']|["']$/g, '');
+  return configuredFrom || 'TesDispo <onboarding@resend.dev>';
 }
 
 export function sendHelloWorldEmail() {
