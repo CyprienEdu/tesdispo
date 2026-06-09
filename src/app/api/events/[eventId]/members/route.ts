@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 
 import { requireAuth } from '@/lib/api-auth';
 import { addEventMember, isSchemaCacheError, listEventMembers } from '@/lib/local-store';
+import { createSupabaseAdminClient } from '@/lib/supabase';
 
 type RouteContext = { params: Promise<{ eventId: string }> };
 
@@ -41,16 +42,51 @@ export async function POST(request: Request, { params }: RouteContext) {
       return NextResponse.json({ error: 'missing_fields' }, { status: 400 });
     }
 
-    const { supabase } = auth;
-    const { data, error } = await supabase
+    const admin = createSupabaseAdminClient();
+    const normalizedMemberName = memberName.toLowerCase() === auth.email.toLowerCase() ? auth.email : memberName;
+    const isSelfJoin = normalizedMemberName.toLowerCase() === auth.email.toLowerCase();
+    const event = await admin
+      .from('events')
+      .select('id,group_id,owner_name')
+      .eq('id', eventId)
+      .single();
+
+    if (event.error || !event.data) {
+      return NextResponse.json({ error: event.error?.message ?? 'event_not_found' }, { status: 404 });
+    }
+
+    const group = await admin.from('groups').select('owner_name').eq('id', event.data.group_id).single();
+    const groupOwner = group.data?.owner_name;
+    const canManage =
+      event.data.owner_name.toLowerCase() === auth.email.toLowerCase() ||
+      String(groupOwner ?? '').toLowerCase() === auth.email.toLowerCase();
+
+    if (!isSelfJoin && !canManage) {
+      return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+    }
+
+    const { data, error } = await admin
       .from('event_members')
-      .upsert({ event_id: eventId, member_name: memberName }, { onConflict: 'event_id,member_name' })
+      .insert({ event_id: eventId, member_name: normalizedMemberName })
       .select('*')
       .single();
 
     if (error || !data) {
+      if (error?.code === '23505') {
+        const existing = await admin
+          .from('event_members')
+          .select('*')
+          .eq('event_id', eventId)
+          .eq('member_name', normalizedMemberName)
+          .single();
+
+        if (!existing.error && existing.data) {
+          return NextResponse.json({ data: existing.data }, { status: 200 });
+        }
+      }
+
       if (error && isSchemaCacheError(error)) {
-        const localMember = await addEventMember(eventId, memberName);
+        const localMember = await addEventMember(eventId, normalizedMemberName);
         return NextResponse.json({ data: localMember }, { status: 201 });
       }
 

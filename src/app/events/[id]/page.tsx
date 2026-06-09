@@ -2,7 +2,7 @@
 
 import { use, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { ArrowRight, CalendarCheck2, Copy, Link as LinkIcon, UserPlus, Users } from 'lucide-react';
+import { ArrowRight, CalendarCheck2, Copy, UserPlus, Users } from 'lucide-react';
 import { format, startOfDay } from 'date-fns';
 
 import { AvailabilityCalendar, type AvailabilityRange, type CalendarView } from '@/components/availability-calendar';
@@ -97,6 +97,19 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
   }, [resolvedParams.id, view, email]);
 
   const fullyFreePeriods = useMemo(() => periods.filter((period) => period.fullyFree), [periods]);
+  const canManageEvent = payload
+    ? email === payload.event.owner_name || email === payload.group?.owner_name
+    : false;
+  const rangesByMember = useMemo(() => {
+    if (!payload) return [];
+
+    return payload.members.map((member) => ({
+      memberName: member.member_name,
+      ranges: ranges
+        .filter((range) => range.member_name === member.member_name)
+        .sort((left, right) => new Date(left.start_ts).getTime() - new Date(right.start_ts).getTime())
+    }));
+  }, [payload, ranges]);
 
   async function addMember() {
     const response = await apiFetch(`/api/events/${resolvedParams.id}/members`, {
@@ -344,12 +357,34 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
                 <Copy className="h-4 w-4" />
                 Copier le lien
               </button>
-              <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-300">
-                <LinkIcon className="h-4 w-4 text-emerald-100" />
-                <span className="truncate">{invitePath}</span>
-              </div>
             </div>
           </article>
+
+          {canManageEvent ? (
+            <article className="rounded-[2rem] border border-white/10 bg-slate-950/60 p-6 shadow-2xl shadow-black/30 backdrop-blur-xl">
+              <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Indispos</p>
+              <h2 className="mt-1 text-2xl font-semibold text-white">Par membre</h2>
+
+              <div className="mt-4 space-y-3">
+                {rangesByMember.map((member) => (
+                  <div key={member.memberName} className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                    <p className="text-sm font-semibold text-white">{member.memberName}</p>
+                    {member.ranges.length === 0 ? (
+                      <p className="mt-2 text-sm text-slate-400">Aucune indispo.</p>
+                    ) : (
+                      <div className="mt-3 space-y-2">
+                        {member.ranges.map((range) => (
+                          <div key={range.id} className="rounded-xl border border-rose-300/20 bg-rose-400/10 px-3 py-2 text-sm text-rose-50">
+                            {format(new Date(range.start_ts), 'dd MMM HH:mm')} - {format(new Date(range.end_ts), 'dd MMM HH:mm')}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </article>
+          ) : null}
 
           <article className="rounded-[2rem] border border-white/10 bg-slate-950/60 p-6 shadow-2xl shadow-black/30 backdrop-blur-xl">
             <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Synthèse</p>

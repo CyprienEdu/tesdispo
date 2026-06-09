@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 
 import { requireAuth } from '@/lib/api-auth';
 import { addGroupMember, isSchemaCacheError, listGroupMembers } from '@/lib/local-store';
+import { createSupabaseAdminClient } from '@/lib/supabase';
 
 function cleanName(value: unknown) {
   return String(value ?? '').trim();
@@ -41,16 +42,41 @@ export async function POST(request: Request, { params }: RouteContext) {
       return NextResponse.json({ error: 'missing_fields' }, { status: 400 });
     }
 
-    const { supabase } = auth;
-    const { data, error } = await supabase
+    const admin = createSupabaseAdminClient();
+    const normalizedMemberName = memberName.toLowerCase() === auth.email.toLowerCase() ? auth.email : memberName;
+    const isSelfJoin = normalizedMemberName.toLowerCase() === auth.email.toLowerCase();
+    const group = await admin.from('groups').select('id,owner_name').eq('id', groupId).single();
+
+    if (group.error || !group.data) {
+      return NextResponse.json({ error: group.error?.message ?? 'group_not_found' }, { status: 404 });
+    }
+
+    if (!isSelfJoin && group.data.owner_name.toLowerCase() !== auth.email.toLowerCase()) {
+      return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+    }
+
+    const { data, error } = await admin
       .from('group_members')
-      .upsert({ group_id: groupId, member_name: memberName }, { onConflict: 'group_id,member_name' })
+      .insert({ group_id: groupId, member_name: normalizedMemberName })
       .select('*')
       .single();
 
     if (error || !data) {
+      if (error?.code === '23505') {
+        const existing = await admin
+          .from('group_members')
+          .select('*')
+          .eq('group_id', groupId)
+          .eq('member_name', normalizedMemberName)
+          .single();
+
+        if (!existing.error && existing.data) {
+          return NextResponse.json({ data: existing.data }, { status: 200 });
+        }
+      }
+
       if (error && isSchemaCacheError(error)) {
-        const localMember = await addGroupMember(groupId, memberName);
+        const localMember = await addGroupMember(groupId, normalizedMemberName);
         return NextResponse.json({ data: localMember }, { status: 201 });
       }
 

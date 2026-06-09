@@ -11,6 +11,7 @@ import { isBetaAllowed } from '@/lib/beta-access';
 export default function AccountPage() {
   const router = useRouter();
   const { configured, loading, session, email, displayName, refreshSession, signOut } = useAuth();
+  const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
   const [authEmail, setAuthEmail] = useState('');
   const [password, setPassword] = useState('');
   const [username, setUsername] = useState('');
@@ -79,9 +80,7 @@ export default function AccountPage() {
 
     setMessage('Connecté.');
     const safeNextPath = getSafeNextPath();
-    if (safeNextPath) {
-      router.push(safeNextPath);
-    }
+    router.push(safeNextPath || '/upcoming');
   }
 
   async function saveProfile() {
@@ -121,6 +120,26 @@ export default function AccountPage() {
           </div>
 
           <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-2 rounded-full border border-white/10 bg-white/5 p-1">
+              <button
+                type="button"
+                onClick={() => setAuthMode('login')}
+                className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                  authMode === 'login' ? 'bg-emerald-400 text-slate-950' : 'text-slate-200 hover:bg-white/10'
+                }`}
+              >
+                Se connecter
+              </button>
+              <button
+                type="button"
+                onClick={() => setAuthMode('signup')}
+                className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                  authMode === 'signup' ? 'bg-emerald-400 text-slate-950' : 'text-slate-200 hover:bg-white/10'
+                }`}
+              >
+                Créer un compte
+              </button>
+            </div>
             <input
               className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-400 focus:border-emerald-300/60"
               placeholder="Email"
@@ -134,28 +153,33 @@ export default function AccountPage() {
               value={password}
               onChange={(event) => setPassword(event.target.value)}
             />
-            <input
-              className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-400 focus:border-emerald-300/60"
-              placeholder="Pseudo"
-              value={username}
-              onChange={(event) => setUsername(event.target.value)}
-            />
+            {authMode === 'signup' ? (
+              <input
+                className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-400 focus:border-emerald-300/60"
+                placeholder="Pseudo"
+                value={username}
+                onChange={(event) => setUsername(event.target.value)}
+              />
+            ) : null}
 
             <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={handleSignup}
-                className="rounded-full bg-emerald-400 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-300"
-              >
-                Créer un compte
-              </button>
-              <button
-                type="button"
-                onClick={handleLogin}
-                className="rounded-full border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
-              >
-                Se connecter
-              </button>
+              {authMode === 'signup' ? (
+                <button
+                  type="button"
+                  onClick={handleSignup}
+                  className="rounded-full bg-emerald-400 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-300"
+                >
+                  Créer un compte
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleLogin}
+                  className="rounded-full bg-emerald-400 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-300"
+                >
+                  Se connecter
+                </button>
+              )}
             </div>
 
             {message ? <p className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-emerald-100">{message}</p> : null}

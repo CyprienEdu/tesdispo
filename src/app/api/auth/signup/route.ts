@@ -36,7 +36,7 @@ export async function POST(request: Request) {
       password,
       options: {
         data: username ? { username } : undefined,
-        redirectTo: `${siteUrl}/account${safeNextPath ? `?next=${encodeURIComponent(safeNextPath)}` : ''}`
+        redirectTo: `${siteUrl}${safeNextPath || '/upcoming'}`
       }
     });
 

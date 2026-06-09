@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { use, useEffect, useMemo, useState } from 'react';
-import { ArrowRight, CalendarRange, Copy, Link as LinkIcon, UserPlus, Users } from 'lucide-react';
+import { ArrowRight, CalendarRange, Copy, UserPlus, Users } from 'lucide-react';
 import { format } from 'date-fns';
 
 import { useAuth } from '@/components/auth-context';
@@ -178,10 +178,6 @@ export default function GroupPage({ params }: { params: Promise<{ id: string }> 
               <Copy className="h-4 w-4" />
               Copier le lien
             </button>
-            <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-300">
-              <LinkIcon className="h-4 w-4 text-emerald-100" />
-              <span className="truncate">{invitePath}</span>
-            </div>
             {message ? <p className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-emerald-100">{message}</p> : null}
           </div>
         </article>
