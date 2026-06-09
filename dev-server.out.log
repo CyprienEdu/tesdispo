@@ -6,18 +6,9 @@
 - Local:         http://localhost:3000
 - Network:       http://192.168.1.24:3000
 - Environments: .env.local
-✓ Ready in 1018ms
+✓ Ready in 1210ms
 
-○ Compiling / ...
- GET / 200 in 5.3s (next.js: 4.8s, application-code: 504ms)
- GET /account 200 in 1588ms (next.js: 1314ms, application-code: 274ms)
- GET /groups 200 in 1524ms (next.js: 1397ms, application-code: 127ms)
- GET /api/groups?scope=all&member_name=cyprienrubio2006%40gmail.com&owner_name=cyprienrubio2006%40gmail.com 200 in 2.2s (next.js: 1365ms, application-code: 866ms)
- GET /api/groups?scope=all&member_name=cyprienrubio2006%40gmail.com&owner_name=cyprienrubio2006%40gmail.com 200 in 2.3s (next.js: 1382ms, application-code: 880ms)
- GET /groups/41557fd5-b3c3-4824-8163-71051b84e609 200 in 3.1s (next.js: 3.0s, application-code: 96ms)
- GET /groups/41557fd5-b3c3-4824-8163-71051b84e609 200 in 61ms (next.js: 21ms, application-code: 40ms)
- GET /groups/41557fd5-b3c3-4824-8163-71051b84e609 200 in 123ms (next.js: 40ms, application-code: 83ms)
- GET /groups/41557fd5-b3c3-4824-8163-71051b84e609 200 in 235ms (next.js: 105ms, application-code: 130ms)
- GET /groups/41557fd5-b3c3-4824-8163-71051b84e609 200 in 58ms (next.js: 5ms, application-code: 53ms)
- GET /api/groups/41557fd5-b3c3-4824-8163-71051b84e609 200 in 3.6s (next.js: 2.7s, application-code: 899ms)
- GET /api/groups/41557fd5-b3c3-4824-8163-71051b84e609 200 in 3.6s (next.js: 2.6s, application-code: 934ms)
+○ Compiling /groups/[id] ...
+ GET /groups/41557fd5-b3c3-4824-8163-71051b84e609 200 in 7.5s (next.js: 6.9s, application-code: 607ms)
+ GET /api/groups/41557fd5-b3c3-4824-8163-71051b84e609 200 in 3.5s (next.js: 2.7s, application-code: 806ms)
+ GET /api/groups/41557fd5-b3c3-4824-8163-71051b84e609 200 in 3.5s (next.js: 2.6s, application-code: 842ms)

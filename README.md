@@ -54,9 +54,10 @@ npm install --legacy-peer-deps
 NEXT_PUBLIC_SUPABASE_URL=...
 NEXT_PUBLIC_SUPABASE_ANON_KEY=...
 RESEND_API_KEY=re_xxxxxxxxx
+RESEND_FROM_EMAIL="TesDispo <contact@ton-domaine.fr>"
 ```
 
-Remplacer `re_xxxxxxxxx` par la vraie cle API Resend.
+Remplacer `re_xxxxxxxxx` par la vraie cle API Resend. `RESEND_FROM_EMAIL` doit utiliser un domaine verifie dans Resend pour envoyer a d autres adresses.
 
 3. Initialiser la base avec `db/init.sql` dans Supabase SQL Editor.
 

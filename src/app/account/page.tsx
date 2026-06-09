@@ -17,6 +17,14 @@ export default function AccountPage() {
   const [message, setMessage] = useState('');
   const profileUsername = username || displayName || '';
 
+  function getAuthMessage(error: string) {
+    if (error === 'email_domain_not_configured') {
+      return 'Email impossible: domaine Resend non configure. Ajoute un domaine valide dans Resend.';
+    }
+
+    return error || 'Création du compte impossible.';
+  }
+
   function getSafeNextPath() {
     const nextPath = new URLSearchParams(window.location.search).get('next') ?? '';
     return nextPath.startsWith('/') && !nextPath.startsWith('//') ? nextPath : '';
@@ -45,7 +53,7 @@ export default function AccountPage() {
 
     if (!signup.ok) {
       const data = await signup.json().catch(() => ({ error: 'signup_failed' }));
-      setMessage(data.error || 'Création du compte impossible.');
+      setMessage(getAuthMessage(data.error));
       return;
     }
 

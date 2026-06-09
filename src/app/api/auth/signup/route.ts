@@ -60,7 +60,11 @@ export async function POST(request: Request) {
         await supabase.auth.admin.deleteUser(data.user.id);
       }
 
-      return NextResponse.json({ error: emailResult.error.message }, { status: 500 });
+      const message = emailResult.error.message.includes('testing emails')
+        ? 'email_domain_not_configured'
+        : emailResult.error.message;
+
+      return NextResponse.json({ error: message }, { status: 500 });
     }
 
     return NextResponse.json({ ok: true });

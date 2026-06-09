@@ -13,9 +13,13 @@ function getResend() {
   return resend;
 }
 
+function getFromAddress() {
+  return process.env.RESEND_FROM_EMAIL ?? 'TesDispo <onboarding@resend.dev>';
+}
+
 export function sendHelloWorldEmail() {
   return getResend().emails.send({
-    from: 'onboarding@resend.dev',
+    from: getFromAddress(),
     to: 'cyprien.rubio@tsm-education.fr',
     subject: 'Hello World',
     html: '<p>Congrats on sending your <strong>first email</strong>!</p>'
@@ -24,7 +28,7 @@ export function sendHelloWorldEmail() {
 
 export function sendSignupConfirmationEmail(to: string, confirmationUrl: string) {
   return getResend().emails.send({
-    from: 'TesDispo <onboarding@resend.dev>',
+    from: getFromAddress(),
     to,
     subject: 'Confirme ton compte TesDispo',
     html: `
