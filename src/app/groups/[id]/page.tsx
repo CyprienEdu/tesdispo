@@ -3,8 +3,8 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { use, useEffect, useMemo, useState } from 'react';
-import { ArrowRight, CalendarRange, Copy, Trash2, UserMinus, UserPlus, Users } from 'lucide-react';
-import { addMonths, endOfMonth, format, startOfMonth } from 'date-fns';
+import { ArrowRight, CalendarRange, Copy, Edit3, Save, Trash2, UserMinus, UserPlus, Users, X } from 'lucide-react';
+import { addMonths, endOfMonth, format, startOfMonth, isSameDay } from 'date-fns';
 
 import type { AvailabilityRange } from '@/components/availability-calendar';
 import { useAuth } from '@/components/auth-context';
@@ -49,6 +49,16 @@ function monthDays(anchorDate: Date) {
   return days;
 }
 
+function normalizeDay(date: Date) {
+  const result = new Date(date);
+  result.setHours(0, 0, 0, 0);
+  return result;
+}
+
+function toLocalInputValue(value: string | null) {
+  return value ? format(new Date(value), "yyyy-MM-dd'T'HH:mm") : '';
+}
+
 export default function GroupPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
   const router = useRouter();
@@ -63,6 +73,13 @@ export default function GroupPage({ params }: { params: Promise<{ id: string }> 
   const [eventName, setEventName] = useState('');
   const [eventAvailabilityStart, setEventAvailabilityStart] = useState('');
   const [eventAvailabilityEnd, setEventAvailabilityEnd] = useState('');
+  const [createEventOpen, setCreateEventOpen] = useState(false);
+  const [editGroupOpen, setEditGroupOpen] = useState(false);
+  const [editGroupName, setEditGroupName] = useState('');
+  const [editingEventId, setEditingEventId] = useState<string | null>(null);
+  const [editEventName, setEditEventName] = useState('');
+  const [editEventAvailabilityStart, setEditEventAvailabilityStart] = useState('');
+  const [editEventAvailabilityEnd, setEditEventAvailabilityEnd] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const invitePath = `/join/group/${resolvedParams.id}`;
@@ -86,6 +103,7 @@ export default function GroupPage({ params }: { params: Promise<{ id: string }> 
 
     setError('');
     setPayload(groupJson.data);
+    setEditGroupName(groupJson.data.group.name);
     setDisplayNames(groupJson.display_names ?? {});
     setRanges(rangesJson.data ?? []);
   }
@@ -97,6 +115,7 @@ export default function GroupPage({ params }: { params: Promise<{ id: string }> 
   }, [resolvedParams.id, email]);
 
   const canManageGroup = payload ? payload.group.owner_name.toLowerCase() === email.toLowerCase() : false;
+  const today = normalizeDay(new Date());
 
   const eventsSorted = useMemo(() => {
     if (!payload) return [];
@@ -108,14 +127,15 @@ export default function GroupPage({ params }: { params: Promise<{ id: string }> 
   }, [payload]);
 
   const selectedRanges = useMemo(() => {
-    if (selectedMember === 'all') return ranges;
-    return ranges.filter((range) => range.member_name.toLowerCase() === selectedMember.toLowerCase());
-  }, [ranges, selectedMember]);
+    const futureRanges = ranges.filter((range) => new Date(range.end_ts) >= today);
+    if (selectedMember === 'all') return futureRanges;
+    return futureRanges.filter((range) => range.member_name.toLowerCase() === selectedMember.toLowerCase());
+  }, [ranges, selectedMember, today]);
 
   const monthlyAvailability = useMemo(() => {
     if (!payload) return [];
 
-    return monthDays(chefMonth).map((day) => {
+    return monthDays(chefMonth).filter((day) => normalizeDay(day) >= today).map((day) => {
       const start = new Date(day);
       start.setHours(0, 0, 0, 0);
       const end = new Date(start);
@@ -127,7 +147,7 @@ export default function GroupPage({ params }: { params: Promise<{ id: string }> 
 
       return { day, blockedMembers, availableMembers };
     });
-  }, [chefMonth, payload, ranges]);
+  }, [chefMonth, payload, ranges, today]);
 
   const selectedMonthlyAvailability = useMemo(() => {
     return monthlyAvailability.filter((day) => {
@@ -135,6 +155,8 @@ export default function GroupPage({ params }: { params: Promise<{ id: string }> 
       return includesName(day.availableMembers, selectedMember);
     });
   }, [monthlyAvailability, selectedMember]);
+
+  const canGoChefBack = startOfMonth(chefMonth).getTime() > startOfMonth(today).getTime() && !isSameDay(chefMonth, today);
 
   async function addMember() {
     if (!canManageGroup) return;
@@ -192,7 +214,59 @@ export default function GroupPage({ params }: { params: Promise<{ id: string }> 
     setEventName('');
     setEventAvailabilityStart('');
     setEventAvailabilityEnd('');
+    setCreateEventOpen(false);
     setMessage('Evenement cree.');
+    await load();
+  }
+
+  async function saveGroup() {
+    if (!canManageGroup) return;
+
+    const response = await apiFetch(`/api/groups/${resolvedParams.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: editGroupName })
+    });
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      setMessage(json.error ?? 'Modification impossible.');
+      return;
+    }
+
+    setEditGroupOpen(false);
+    setMessage('Groupe modifie.');
+    await load();
+  }
+
+  function openEditEvent(eventId: string) {
+    const item = payload?.events.find((event) => event.id === eventId);
+    if (!item) return;
+    setEditingEventId(eventId);
+    setEditEventName(item.name);
+    setEditEventAvailabilityStart(toLocalInputValue(item.availability_start_ts));
+    setEditEventAvailabilityEnd(toLocalInputValue(item.availability_end_ts));
+  }
+
+  async function saveEvent() {
+    if (!canManageGroup || !editingEventId) return;
+
+    const response = await apiFetch(`/api/events/${editingEventId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: editEventName,
+        availability_start_ts: editEventAvailabilityStart ? new Date(editEventAvailabilityStart).toISOString() : null,
+        availability_end_ts: editEventAvailabilityEnd ? new Date(editEventAvailabilityEnd).toISOString() : null
+      })
+    });
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      setMessage(json.error ?? 'Modification impossible.');
+      return;
+    }
+
+    setEditingEventId(null);
+    setMessage('Evenement modifie.');
     await load();
   }
 
@@ -260,14 +334,24 @@ export default function GroupPage({ params }: { params: Promise<{ id: string }> 
               </div>
             </div>
             {canManageGroup ? (
-              <button
-                type="button"
-                onClick={deleteGroup}
-                className="inline-flex items-center gap-2 rounded-full border border-rose-300/30 bg-rose-400/10 px-4 py-3 text-sm font-semibold text-rose-50 transition hover:bg-rose-400/15"
-              >
-                <Trash2 className="h-4 w-4" />
-                Supprimer
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditGroupOpen(true)}
+                  className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
+                >
+                  <Edit3 className="h-4 w-4" />
+                  Modifier
+                </button>
+                <button
+                  type="button"
+                  onClick={deleteGroup}
+                  className="inline-flex items-center gap-2 rounded-full border border-rose-300/30 bg-rose-400/10 px-4 py-3 text-sm font-semibold text-rose-50 transition hover:bg-rose-400/15"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Supprimer
+                </button>
+              </div>
             ) : null}
           </div>
 
@@ -360,7 +444,8 @@ export default function GroupPage({ params }: { params: Promise<{ id: string }> 
                   <button
                     type="button"
                     onClick={() => setChefMonth((date) => addMonths(date, -1))}
-                    className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-white transition hover:bg-white/10"
+                    disabled={!canGoChefBack}
+                    className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     Precedent
                   </button>
@@ -414,30 +499,10 @@ export default function GroupPage({ params }: { params: Promise<{ id: string }> 
           </div>
 
           {canManageGroup ? (
-            <div className="mt-4 space-y-3">
-              <input
-                className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-400 focus:border-emerald-300/60"
-                placeholder="Nom du nouvel evenement"
-                value={eventName}
-                onChange={(event) => setEventName(event.target.value)}
-              />
-              <div className="grid gap-3 sm:grid-cols-2">
-                <input
-                  className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none focus:border-emerald-300/60"
-                  type="datetime-local"
-                  value={eventAvailabilityStart}
-                  onChange={(event) => setEventAvailabilityStart(event.target.value)}
-                />
-                <input
-                  className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none focus:border-emerald-300/60"
-                  type="datetime-local"
-                  value={eventAvailabilityEnd}
-                  onChange={(event) => setEventAvailabilityEnd(event.target.value)}
-                />
-              </div>
+            <div className="mt-4">
               <button
                 type="button"
-                onClick={createEvent}
+                onClick={() => setCreateEventOpen(true)}
                 className="inline-flex items-center gap-2 rounded-full bg-emerald-400 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-300"
               >
                 <CalendarRange className="h-4 w-4" />
@@ -475,14 +540,24 @@ export default function GroupPage({ params }: { params: Promise<{ id: string }> 
                       </Link>
                       <div className="flex items-center gap-2">
                         {canManageGroup ? (
-                          <button
-                            type="button"
-                            onClick={() => void deleteEvent(event.id)}
-                            className="rounded-full border border-rose-300/30 bg-rose-400/10 p-2 text-rose-50 transition hover:bg-rose-400/15"
-                            aria-label={`Supprimer ${event.name}`}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => openEditEvent(event.id)}
+                              className="rounded-full border border-white/10 bg-white/5 p-2 text-white transition hover:bg-white/10"
+                              aria-label={`Modifier ${event.name}`}
+                            >
+                              <Edit3 className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void deleteEvent(event.id)}
+                              className="rounded-full border border-rose-300/30 bg-rose-400/10 p-2 text-rose-50 transition hover:bg-rose-400/15"
+                              aria-label={`Supprimer ${event.name}`}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </>
                         ) : null}
                         <ArrowRight className="h-4 w-4 text-slate-400" />
                       </div>
@@ -494,6 +569,82 @@ export default function GroupPage({ params }: { params: Promise<{ id: string }> 
           </div>
         </article>
       </section>
+
+      {editGroupOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-xl rounded-2xl border border-white/10 bg-slate-950 p-5 shadow-2xl">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-xl font-semibold text-white">Modifier le groupe</h2>
+              <button type="button" onClick={() => setEditGroupOpen(false)} className="rounded-full border border-white/10 p-2 text-white">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <input
+              className="mt-4 w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-400 focus:border-emerald-300/60"
+              placeholder="Nom du groupe"
+              value={editGroupName}
+              onChange={(event) => setEditGroupName(event.target.value)}
+            />
+            <button type="button" onClick={saveGroup} className="mt-4 inline-flex items-center gap-2 rounded-full bg-emerald-400 px-4 py-3 text-sm font-semibold text-slate-950">
+              <Save className="h-4 w-4" />
+              Enregistrer
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {createEventOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-xl rounded-2xl border border-white/10 bg-slate-950 p-5 shadow-2xl">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-xl font-semibold text-white">Creer un evenement</h2>
+              <button type="button" onClick={() => setCreateEventOpen(false)} className="rounded-full border border-white/10 p-2 text-white">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="mt-4 space-y-3">
+              <input
+                className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-400 focus:border-emerald-300/60"
+                placeholder="Nom du nouvel evenement"
+                value={eventName}
+                onChange={(event) => setEventName(event.target.value)}
+              />
+              <div className="grid gap-3 sm:grid-cols-2">
+                <input className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none focus:border-emerald-300/60" type="datetime-local" value={eventAvailabilityStart} onChange={(event) => setEventAvailabilityStart(event.target.value)} />
+                <input className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none focus:border-emerald-300/60" type="datetime-local" value={eventAvailabilityEnd} onChange={(event) => setEventAvailabilityEnd(event.target.value)} />
+              </div>
+              <button type="button" onClick={createEvent} className="inline-flex items-center gap-2 rounded-full bg-emerald-400 px-4 py-3 text-sm font-semibold text-slate-950">
+                <CalendarRange className="h-4 w-4" />
+                Creer
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {editingEventId ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-xl rounded-2xl border border-white/10 bg-slate-950 p-5 shadow-2xl">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-xl font-semibold text-white">Modifier l&apos;evenement</h2>
+              <button type="button" onClick={() => setEditingEventId(null)} className="rounded-full border border-white/10 p-2 text-white">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="mt-4 space-y-3">
+              <input className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-400 focus:border-emerald-300/60" placeholder="Nom" value={editEventName} onChange={(event) => setEditEventName(event.target.value)} />
+              <div className="grid gap-3 sm:grid-cols-2">
+                <input className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none focus:border-emerald-300/60" type="datetime-local" value={editEventAvailabilityStart} onChange={(event) => setEditEventAvailabilityStart(event.target.value)} />
+                <input className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none focus:border-emerald-300/60" type="datetime-local" value={editEventAvailabilityEnd} onChange={(event) => setEditEventAvailabilityEnd(event.target.value)} />
+              </div>
+              <button type="button" onClick={saveEvent} className="inline-flex items-center gap-2 rounded-full bg-emerald-400 px-4 py-3 text-sm font-semibold text-slate-950">
+                <Save className="h-4 w-4" />
+                Enregistrer
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }

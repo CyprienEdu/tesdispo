@@ -25,7 +25,9 @@ async function canManageEvent(supabase: SupabaseClient, eventId: string, email: 
     return { ok: false, missing: true, error: eventRes.error?.message };
   }
 
-  const groupRes = await supabase.from('groups').select('owner_name').eq('id', eventRes.data.group_id).single();
+  const groupRes = eventRes.data.group_id
+    ? await supabase.from('groups').select('owner_name').eq('id', eventRes.data.group_id).single()
+    : { data: null };
   const groupOwner = groupRes.data?.owner_name ?? '';
 
   return {
@@ -63,7 +65,9 @@ export async function GET(request: Request, { params }: RouteContext) {
       return NextResponse.json({
         data: {
           event: localSummary,
-          group: { id: localSummary.group_id, name: localSummary.group_name ?? '', owner_name: localSummary.owner_name },
+          group: localSummary.group_id
+            ? { id: localSummary.group_id, name: localSummary.group_name ?? '', owner_name: localSummary.group_owner_name ?? localSummary.owner_name }
+            : null,
           members: localSummary.members ?? []
         },
         display_names: displayNames
@@ -73,7 +77,9 @@ export async function GET(request: Request, { params }: RouteContext) {
     return NextResponse.json({ error: eventRes.error?.message ?? 'event_not_found' }, { status: 404 });
   }
 
-  const groupRes = await supabase.from('groups').select('id,name,owner_name').eq('id', eventRes.data.group_id).single();
+  const groupRes = eventRes.data.group_id
+    ? await supabase.from('groups').select('id,name,owner_name').eq('id', eventRes.data.group_id).single()
+    : { data: null, error: null };
   const group = groupRes.error && isSchemaCacheError(groupRes.error) ? null : groupRes.data ?? null;
   const members = membersRes.error && isSchemaCacheError(membersRes.error) ? [] : membersRes.data ?? [];
   const displayNames = await getDisplayNames([

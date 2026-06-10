@@ -3,8 +3,8 @@
 import { useRouter } from 'next/navigation';
 import { use, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { ArrowRight, CalendarCheck2, Copy, Trash2, UserMinus, UserPlus, Users } from 'lucide-react';
-import { addMonths, endOfMonth, format, startOfMonth } from 'date-fns';
+import { ArrowRight, CalendarCheck2, Copy, Edit3, Save, Trash2, UserMinus, UserPlus, Users, X } from 'lucide-react';
+import { addDays, addMonths, endOfMonth, format, startOfMonth } from 'date-fns';
 
 import { AvailabilityCalendar, type AvailabilityRange, type CalendarView } from '@/components/availability-calendar';
 import { useAuth } from '@/components/auth-context';
@@ -12,7 +12,7 @@ import { useAuth } from '@/components/auth-context';
 type EventPayload = {
   event: {
     id: string;
-    group_id: string;
+    group_id: string | null;
     name: string;
     owner_name: string;
     resolved_at: string | null;
@@ -23,18 +23,6 @@ type EventPayload = {
   };
   group: { id: string; name: string; owner_name: string } | null;
   members: { id: string; member_name: string }[];
-};
-
-type Period = {
-  key: string;
-  label: string;
-  start: string;
-  end: string;
-  blockedMembers: string[];
-  availableMembers: string[];
-  totalMembers: number;
-  blockedCount: number;
-  fullyFree: boolean;
 };
 
 type AvailabilityMode = 'busy' | 'free';
@@ -51,10 +39,6 @@ function addMillisecond(date: Date, value: number) {
   const result = new Date(date);
   result.setMilliseconds(result.getMilliseconds() + value);
   return result;
-}
-
-function periodViewFor(view: CalendarView) {
-  return view === 'year' ? 'month' : view === 'month' ? 'month' : 'week';
 }
 
 function includesName(list: string[], name: string) {
@@ -76,6 +60,21 @@ function monthDays(anchorDate: Date) {
   return days;
 }
 
+function normalizeDay(date: Date) {
+  const result = new Date(date);
+  result.setHours(0, 0, 0, 0);
+  return result;
+}
+
+function daysBetweenInclusive(start: Date | null, end: Date | null) {
+  if (!start || !end) return 1;
+  return Math.max(1, Math.ceil((normalizeDay(end).getTime() - normalizeDay(start).getTime()) / 86400000) + 1);
+}
+
+function sameDate(left: Date, right: Date) {
+  return normalizeDay(left).getTime() === normalizeDay(right).getTime();
+}
+
 export default function EventPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
   const router = useRouter();
@@ -83,32 +82,36 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
   const [payload, setPayload] = useState<EventPayload | null>(null);
   const [displayNames, setDisplayNames] = useState<Record<string, string>>({});
   const [ranges, setRanges] = useState<AvailabilityRange[]>([]);
-  const [periods, setPeriods] = useState<Period[]>([]);
   const [view, setView] = useState<CalendarView>('month');
   const [anchorDate, setAnchorDate] = useState(() => new Date());
   const [chefMonth, setChefMonth] = useState(() => new Date());
+  const [synthesisMonth, setSynthesisMonth] = useState(() => new Date());
   const [selectedMember, setSelectedMember] = useState('all');
   const [availabilityMode, setAvailabilityMode] = useState<AvailabilityMode>('busy');
+  const [consecutiveDays, setConsecutiveDays] = useState('1');
   const [memberName, setMemberName] = useState('');
   const [eventDate, setEventDate] = useState('');
   const [availabilityStart, setAvailabilityStart] = useState('');
   const [availabilityEnd, setAvailabilityEnd] = useState('');
+  const [editOpen, setEditOpen] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editResolvedAt, setEditResolvedAt] = useState('');
+  const [editAvailabilityStart, setEditAvailabilityStart] = useState('');
+  const [editAvailabilityEnd, setEditAvailabilityEnd] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const invitePath = `/join/event/${resolvedParams.id}`;
 
-  async function loadData(nextView: CalendarView = view) {
+  async function loadData() {
     if (!email) return;
 
-    const [eventRes, rangesRes, periodsRes] = await Promise.all([
+    const [eventRes, rangesRes] = await Promise.all([
       apiFetch(`/api/events/${resolvedParams.id}`, { cache: 'no-store' }),
-      apiFetch(`/api/availabilities?scope_type=event&scope_id=${resolvedParams.id}`, { cache: 'no-store' }),
-      apiFetch(`/api/events/${resolvedParams.id}/common-slots?view=${periodViewFor(nextView)}&count=8`, { cache: 'no-store' })
+      apiFetch(`/api/availabilities?scope_type=event&scope_id=${resolvedParams.id}`, { cache: 'no-store' })
     ]);
 
     const eventJson = await eventRes.json().catch(() => ({ data: null }));
     const rangesJson = await rangesRes.json().catch(() => ({ data: [] }));
-    const periodsJson = await periodsRes.json().catch(() => ({ periods: [] }));
 
     if (!eventRes.ok || !eventJson?.data?.event) {
       setError(eventJson?.error ?? 'Evenement introuvable.');
@@ -124,35 +127,60 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
     });
     setDisplayNames(eventJson.display_names ?? {});
     setRanges(rangesJson.data ?? []);
-    setPeriods(periodsJson.periods ?? []);
     setEventDate(toLocalInputValue(eventJson.data.event.resolved_at));
     setAvailabilityStart(toLocalInputValue(eventJson.data.event.availability_start_ts ?? null));
     setAvailabilityEnd(toLocalInputValue(eventJson.data.event.availability_end_ts ?? null));
+    setEditName(eventJson.data.event.name);
+    setEditResolvedAt(toLocalInputValue(eventJson.data.event.resolved_at));
+    setEditAvailabilityStart(toLocalInputValue(eventJson.data.event.availability_start_ts ?? null));
+    setEditAvailabilityEnd(toLocalInputValue(eventJson.data.event.availability_end_ts ?? null));
+    setConsecutiveDays(String(daysBetweenInclusive(
+      eventJson.data.event.availability_start_ts ? new Date(eventJson.data.event.availability_start_ts) : null,
+      eventJson.data.event.availability_end_ts ? new Date(eventJson.data.event.availability_end_ts) : null
+    )));
+    setSynthesisMonth(eventJson.data.event.availability_start_ts ? new Date(eventJson.data.event.availability_start_ts) : new Date());
   }
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    void loadData(view);
+    void loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resolvedParams.id, view, email]);
+  }, [resolvedParams.id, email]);
 
   const canManageEvent = payload
     ? email.toLowerCase() === payload.event.owner_name.toLowerCase() ||
       email.toLowerCase() === String(payload.group?.owner_name ?? '').toLowerCase()
     : false;
+  const availabilityMinDate = useMemo(
+    () => (payload?.event.availability_start_ts ? new Date(payload.event.availability_start_ts) : null),
+    [payload]
+  );
+  const availabilityMaxDate = useMemo(
+    () => (payload?.event.availability_end_ts ? new Date(payload.event.availability_end_ts) : null),
+    [payload]
+  );
+  const today = useMemo(() => normalizeDay(new Date()), []);
+  const effectiveMinDate = availabilityMinDate && availabilityMinDate > today ? availabilityMinDate : today;
+  const requestedConsecutiveDays = Math.max(1, Number(consecutiveDays) || 1);
 
   const selectedRanges = useMemo(() => {
-    if (!canManageEvent || selectedMember === 'all') return ranges;
-    return ranges.filter((range) => range.member_name.toLowerCase() === selectedMember.toLowerCase());
-  }, [canManageEvent, ranges, selectedMember]);
-
-  const availabilityMinDate = payload?.event.availability_start_ts ? new Date(payload.event.availability_start_ts) : null;
-  const availabilityMaxDate = payload?.event.availability_end_ts ? new Date(payload.event.availability_end_ts) : null;
+    const visibleRanges = ranges.filter((range) => {
+      if (new Date(range.end_ts) < today) return false;
+      if (availabilityMinDate && new Date(range.end_ts) < normalizeDay(availabilityMinDate)) return false;
+      if (availabilityMaxDate && new Date(range.start_ts) > normalizeDay(availabilityMaxDate)) return false;
+      return true;
+    });
+    if (!canManageEvent || selectedMember === 'all') return visibleRanges;
+    return visibleRanges.filter((range) => range.member_name.toLowerCase() === selectedMember.toLowerCase());
+  }, [availabilityMaxDate, availabilityMinDate, canManageEvent, ranges, selectedMember, today]);
 
   const monthlyAvailability = useMemo(() => {
     if (!payload) return [];
 
-    return monthDays(chefMonth).map((day) => {
+    return monthDays(chefMonth).filter((day) => {
+      const normalized = normalizeDay(day);
+      return normalized >= today && (!availabilityMinDate || normalized >= normalizeDay(availabilityMinDate)) && (!availabilityMaxDate || normalized <= normalizeDay(availabilityMaxDate));
+    }).map((day) => {
       const start = new Date(day);
       start.setHours(0, 0, 0, 0);
       const end = new Date(start);
@@ -164,7 +192,7 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
 
       return { day, blockedMembers, availableMembers };
     });
-  }, [chefMonth, payload, ranges]);
+  }, [availabilityMaxDate, availabilityMinDate, chefMonth, payload, ranges, today]);
 
   const selectedMonthlyAvailability = useMemo(() => {
     return monthlyAvailability.filter((day) => {
@@ -172,6 +200,65 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
       return includesName(day.availableMembers, selectedMember);
     });
   }, [monthlyAvailability, selectedMember]);
+
+  const chefAvailableWindows = useMemo(() => {
+    const days = selectedMonthlyAvailability.sort((left, right) => left.day.getTime() - right.day.getTime());
+    const windows: { key: string; start: Date; end: Date; availableMembers: string[] }[] = [];
+
+    for (let index = 0; index <= days.length - requestedConsecutiveDays; index += 1) {
+      const slice = days.slice(index, index + requestedConsecutiveDays);
+      const consecutive = slice.every((item, sliceIndex) => sliceIndex === 0 || sameDate(item.day, addDays(slice[sliceIndex - 1].day, 1)));
+      if (!consecutive) continue;
+
+      const commonMembers = slice[0].availableMembers.filter((member) => slice.every((item) => includesName(item.availableMembers, member)));
+      if (selectedMember !== 'all' && !includesName(commonMembers, selectedMember)) continue;
+      if (commonMembers.length === 0) continue;
+
+      windows.push({
+        key: `${slice[0].day.toISOString()}-${slice[slice.length - 1].day.toISOString()}`,
+        start: slice[0].day,
+        end: slice[slice.length - 1].day,
+        availableMembers: commonMembers
+      });
+    }
+
+    return windows;
+  }, [requestedConsecutiveDays, selectedMember, selectedMonthlyAvailability]);
+
+  const synthesisDays = useMemo(() => {
+    if (!payload) return [];
+
+    return monthDays(synthesisMonth).filter((day) => {
+      const normalized = normalizeDay(day);
+      if (normalized < today) return false;
+      if (availabilityMinDate && normalized < normalizeDay(availabilityMinDate)) return false;
+      if (availabilityMaxDate && normalized > normalizeDay(availabilityMaxDate)) return false;
+
+      const start = new Date(normalized);
+      const end = new Date(start);
+      end.setDate(end.getDate() + 1);
+      return payload.members.every((member) => !ranges.some((range) => range.member_name === member.member_name && rangeOverlaps(start, end, range)));
+    });
+  }, [availabilityMaxDate, availabilityMinDate, payload, ranges, synthesisMonth, today]);
+
+  const synthesisWindows = useMemo(() => {
+    const size = daysBetweenInclusive(availabilityMinDate, availabilityMaxDate);
+    const windows: { key: string; start: Date; end: Date }[] = [];
+
+    for (let index = 0; index <= synthesisDays.length - size; index += 1) {
+      const slice = synthesisDays.slice(index, index + size);
+      const consecutive = slice.every((day, sliceIndex) => sliceIndex === 0 || sameDate(day, addDays(slice[sliceIndex - 1], 1)));
+      if (!consecutive) continue;
+      windows.push({ key: `${slice[0].toISOString()}-${slice[slice.length - 1].toISOString()}`, start: slice[0], end: slice[slice.length - 1] });
+    }
+
+    return windows;
+  }, [availabilityMaxDate, availabilityMinDate, synthesisDays]);
+
+  const canGoChefBack = startOfMonth(chefMonth).getTime() > startOfMonth(effectiveMinDate).getTime();
+  const canGoChefForward = !availabilityMaxDate || startOfMonth(addMonths(chefMonth, 1)).getTime() <= startOfMonth(availabilityMaxDate).getTime();
+  const canGoSynthesisBack = startOfMonth(synthesisMonth).getTime() > startOfMonth(effectiveMinDate).getTime();
+  const canGoSynthesisForward = !availabilityMaxDate || startOfMonth(addMonths(synthesisMonth, 1)).getTime() <= startOfMonth(availabilityMaxDate).getTime();
 
   async function addMember() {
     if (!canManageEvent) return;
@@ -190,7 +277,7 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
 
     setMemberName('');
     setMessage("Membre ajoute a l'evenement.");
-    await loadData(view);
+    await loadData();
   }
 
   async function removeMember(member: string) {
@@ -203,7 +290,7 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
     });
     const json = await response.json().catch(() => ({}));
     setMessage(response.ok ? 'Membre supprime.' : json.error ?? 'Suppression impossible.');
-    await loadData(view);
+    await loadData();
   }
 
   async function copyInviteLink() {
@@ -230,7 +317,7 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
     }
 
     setMessage('Date validee.');
-    await loadData(view);
+    await loadData();
   }
 
   async function saveAvailabilityWindow() {
@@ -252,7 +339,32 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
     }
 
     setMessage('Periode mise a jour.');
-    await loadData(view);
+    await loadData();
+  }
+
+  async function saveEventDetails() {
+    if (!canManageEvent) return;
+
+    const response = await apiFetch(`/api/events/${resolvedParams.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: editName,
+        resolved_at: editResolvedAt ? new Date(editResolvedAt).toISOString() : null,
+        availability_start_ts: editAvailabilityStart ? new Date(editAvailabilityStart).toISOString() : null,
+        availability_end_ts: editAvailabilityEnd ? new Date(editAvailabilityEnd).toISOString() : null
+      })
+    });
+
+    const json = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      setMessage(json.error ?? 'Modification impossible.');
+      return;
+    }
+
+    setEditOpen(false);
+    setMessage('Evenement modifie.');
+    await loadData();
   }
 
   async function deleteEvent() {
@@ -266,7 +378,7 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
       return;
     }
 
-    router.push(`/groups/${payload.event.group_id}`);
+    router.push(payload.event.group_id ? `/groups/${payload.event.group_id}` : '/events');
   }
 
   async function createAvailability(start: Date, end: Date) {
@@ -322,13 +434,13 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
         if (!createResponse.ok) {
           const createJson = await createResponse.json().catch(() => ({}));
           setMessage(createJson.error ?? 'Indisponibilite retiree partiellement.');
-          await loadData(view);
+          await loadData();
           return;
         }
       }
 
       setMessage('Indisponibilite retiree.');
-      await loadData(view);
+      await loadData();
       return;
     }
 
@@ -347,7 +459,7 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
     }
 
     setMessage('Indisponibilite ajoutee.');
-    await loadData(view);
+    await loadData();
   }
 
   if (error) {
@@ -388,14 +500,24 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
 
             <div className="flex flex-wrap gap-2">
               {canManageEvent ? (
-                <button
-                  type="button"
-                  onClick={deleteEvent}
-                  className="inline-flex items-center gap-2 rounded-full border border-rose-300/30 bg-rose-400/10 px-4 py-3 text-sm font-semibold text-rose-50 transition hover:bg-rose-400/15"
-                >
-                  <Trash2 className="h-4 w-4" />
-                  Supprimer
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setEditOpen(true)}
+                    className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
+                  >
+                    <Edit3 className="h-4 w-4" />
+                    Modifier
+                  </button>
+                  <button
+                    type="button"
+                    onClick={deleteEvent}
+                    className="inline-flex items-center gap-2 rounded-full border border-rose-300/30 bg-rose-400/10 px-4 py-3 text-sm font-semibold text-rose-50 transition hover:bg-rose-400/15"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    Supprimer
+                  </button>
+                </>
               ) : null}
               <Link
                 href="/upcoming"
@@ -566,12 +688,22 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
                 ))}
               </select>
 
+              <input
+                className="mt-3 w-full rounded-2xl border border-white/10 bg-slate-950/80 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-400 focus:border-emerald-300/60"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                placeholder="Jours consecutifs"
+                value={consecutiveDays}
+                onChange={(event) => setConsecutiveDays(event.target.value.replace(/\D/g, '') || '1')}
+              />
+
               {availabilityMode === 'free' ? (
                 <div className="mt-4 flex items-center justify-between gap-2 rounded-2xl border border-white/10 bg-white/5 p-2">
                   <button
                     type="button"
                     onClick={() => setChefMonth((date) => addMonths(date, -1))}
-                    className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-white transition hover:bg-white/10"
+                    disabled={!canGoChefBack}
+                    className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     Precedent
                   </button>
@@ -579,7 +711,8 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
                   <button
                     type="button"
                     onClick={() => setChefMonth((date) => addMonths(date, 1))}
-                    className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-white transition hover:bg-white/10"
+                    disabled={!canGoChefForward}
+                    className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     Suivant
                   </button>
@@ -594,16 +727,18 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
                         <p>{format(new Date(range.start_ts), 'dd MMM HH:mm')} - {format(new Date(range.end_ts), 'dd MMM HH:mm')}</p>
                       </div>
                     ))
-                  : selectedMonthlyAvailability.map((day) => (
-                      <div key={day.day.toISOString()} className="rounded-2xl border border-emerald-300/20 bg-emerald-300/10 px-3 py-2 text-sm text-emerald-50">
-                        <p className="font-semibold">{format(day.day, 'dd MMM yyyy')}</p>
-                        <p>{day.availableMembers.length}/{payload.members.length} dispo</p>
+                  : chefAvailableWindows.map((window) => (
+                      <div key={window.key} className="rounded-2xl border border-emerald-300/20 bg-emerald-300/10 px-3 py-2 text-sm text-emerald-50">
+                        <p className="font-semibold">
+                          {format(window.start, 'dd MMM yyyy')}{sameDate(window.start, window.end) ? '' : ` - ${format(window.end, 'dd MMM yyyy')}`}
+                        </p>
+                        <p>{window.availableMembers.length}/{payload.members.length} dispo</p>
                         <p className="mt-1 text-xs text-emerald-50/80">
-                          {day.availableMembers.map((member) => displayFor(member, displayNames)).join(', ')}
+                          {window.availableMembers.map((member) => displayFor(member, displayNames)).join(', ')}
                         </p>
                       </div>
                     ))}
-                {(availabilityMode === 'busy' ? selectedRanges : selectedMonthlyAvailability).length === 0 ? (
+                {(availabilityMode === 'busy' ? selectedRanges : chefAvailableWindows).length === 0 ? (
                   <p className="rounded-2xl border border-dashed border-white/10 bg-white/5 px-4 py-6 text-sm text-slate-400">
                     Aucune donnee.
                   </p>
@@ -614,30 +749,47 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
 
           <article className="rounded-[2rem] border border-white/10 bg-slate-950/60 p-6 shadow-2xl shadow-black/30 backdrop-blur-xl">
             <p className="text-xs uppercase tracking-[0.3em] text-slate-400">Synthese</p>
-            <h2 className="mt-1 text-2xl font-semibold text-white">Periodes ideales</h2>
+            <h2 className="mt-1 text-2xl font-semibold text-white">Dispos</h2>
+
+            <div className="mt-4 flex items-center justify-between gap-2 rounded-2xl border border-white/10 bg-white/5 p-2">
+              <button
+                type="button"
+                onClick={() => setSynthesisMonth((date) => addMonths(date, -1))}
+                disabled={!canGoSynthesisBack}
+                className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Precedent
+              </button>
+              <p className="text-sm font-semibold text-white">{format(synthesisMonth, 'MMMM yyyy')}</p>
+              <button
+                type="button"
+                onClick={() => setSynthesisMonth((date) => addMonths(date, 1))}
+                disabled={!canGoSynthesisForward}
+                className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-sm text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Suivant
+              </button>
+            </div>
 
             <div className="mt-4 space-y-3">
-              {periods.filter((period) => period.fullyFree).length === 0 ? (
+              {synthesisWindows.length === 0 ? (
                 <p className="rounded-2xl border border-dashed border-white/10 bg-white/5 px-4 py-6 text-sm text-slate-400">
-                  Pas encore de periode totalement libre.
+                  Pas encore de dispo totale.
                 </p>
               ) : (
-                periods
-                  .filter((period) => period.fullyFree)
-                  .map((period) => (
-                    <button
-                      key={period.key}
-                      type="button"
-                      onClick={() => void saveEventDate(period.start)}
-                      disabled={!canManageEvent}
-                      className="w-full rounded-2xl border border-emerald-300/30 bg-emerald-300/10 px-4 py-4 text-left transition hover:bg-emerald-300/15 disabled:cursor-default disabled:opacity-70"
-                    >
-                      <p className="text-xs uppercase tracking-[0.3em] text-emerald-100/70">{period.label}</p>
-                      <p className="mt-2 text-sm text-white">
-                        {format(new Date(period.start), 'dd MMM yyyy HH:mm')} - {format(new Date(period.end), 'dd MMM yyyy HH:mm')}
-                      </p>
-                    </button>
-                  ))
+                synthesisWindows.map((period) => (
+                  <button
+                    key={period.key}
+                    type="button"
+                    onClick={() => void saveEventDate(period.start.toISOString())}
+                    disabled={!canManageEvent}
+                    className="w-full rounded-2xl border border-emerald-300/30 bg-emerald-300/10 px-4 py-4 text-left transition hover:bg-emerald-300/15 disabled:cursor-default disabled:opacity-70"
+                  >
+                    <p className="text-sm font-semibold text-white">
+                      {format(period.start, 'dd MMM yyyy')}{sameDate(period.start, period.end) ? '' : ` - ${format(period.end, 'dd MMM yyyy')}`}
+                    </p>
+                  </button>
+                ))
               )}
             </div>
 
@@ -645,6 +797,31 @@ export default function EventPage({ params }: { params: Promise<{ id: string }> 
           </article>
         </aside>
       </section>
+
+      {editOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-xl rounded-2xl border border-white/10 bg-slate-950 p-5 shadow-2xl">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-xl font-semibold text-white">Modifier l&apos;evenement</h2>
+              <button type="button" onClick={() => setEditOpen(false)} className="rounded-full border border-white/10 p-2 text-white">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="mt-4 space-y-3">
+              <input className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-400 focus:border-emerald-300/60" placeholder="Nom" value={editName} onChange={(event) => setEditName(event.target.value)} />
+              <input className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none focus:border-emerald-300/60" type="datetime-local" value={editResolvedAt} onChange={(event) => setEditResolvedAt(event.target.value)} />
+              <div className="grid gap-3 sm:grid-cols-2">
+                <input className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none focus:border-emerald-300/60" type="datetime-local" value={editAvailabilityStart} onChange={(event) => setEditAvailabilityStart(event.target.value)} />
+                <input className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none focus:border-emerald-300/60" type="datetime-local" value={editAvailabilityEnd} onChange={(event) => setEditAvailabilityEnd(event.target.value)} />
+              </div>
+              <button type="button" onClick={saveEventDetails} className="inline-flex items-center gap-2 rounded-full bg-emerald-400 px-4 py-3 text-sm font-semibold text-slate-950">
+                <Save className="h-4 w-4" />
+                Enregistrer
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }

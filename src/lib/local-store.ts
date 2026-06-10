@@ -19,7 +19,7 @@ type GroupMember = {
 
 type EventItem = {
   id: string;
-  group_id: string;
+  group_id: string | null;
   name: string;
   owner_name: string;
   resolved_at: string | null;
@@ -251,7 +251,7 @@ export async function listEventMembers(eventId: string) {
 }
 
 export async function createEvent(
-  groupId: string,
+  groupId: string | null,
   name: string,
   ownerName: string,
   resolvedAt: string | null,
@@ -299,7 +299,7 @@ export async function getEventSummary(eventId: string): Promise<EventSummary | n
   const event = state.events.find((item) => item.id === eventId);
   if (!event) return null;
 
-  const group = state.groups.find((item) => item.id === event.group_id);
+  const group = event.group_id ? state.groups.find((item) => item.id === event.group_id) : null;
 
   return {
     ...event,
@@ -387,7 +387,7 @@ export async function resolveGroupsForEvents(eventIds: string[]) {
   return eventIds.reduce<Record<string, string>>((accumulator, eventId) => {
     const event = state.events.find((item) => item.id === eventId);
     if (event) {
-      accumulator[eventId] = groupById.get(event.group_id) ?? '';
+      accumulator[eventId] = event.group_id ? groupById.get(event.group_id) ?? '' : '';
     }
     return accumulator;
   }, {});
@@ -401,17 +401,22 @@ export async function listEventsWithGroupNames() {
     .sort((left, right) => right.created_at.localeCompare(left.created_at))
     .map((event) => ({
       ...event,
-      group_name: groupById.get(event.group_id) ?? ''
+      group_name: event.group_id ? groupById.get(event.group_id) ?? '' : ''
     }));
 }
 
 export async function deleteGroup(groupId: string) {
   return mutate(async (state) => {
+    const eventIds = new Set(state.events.filter((event) => event.group_id === groupId).map((event) => event.id));
     state.groups = state.groups.filter((group) => group.id !== groupId);
     state.group_members = state.group_members.filter((member) => member.group_id !== groupId);
     state.events = state.events.filter((event) => event.group_id !== groupId);
     state.event_members = state.event_members.filter((member) => state.events.some((event) => event.id === member.event_id));
-    state.availabilities = state.availabilities.filter((availability) => availability.scope_id !== groupId);
+    state.availabilities = state.availabilities.filter(
+      (availability) =>
+        !(availability.scope_type === 'group' && availability.scope_id === groupId) &&
+        !(availability.scope_type === 'event' && eventIds.has(availability.scope_id))
+    );
   });
 }
 

@@ -149,7 +149,6 @@ export function AvailabilityCalendar({
   function renderDayCell(date: Date) {
     const dayRanges = ranges.filter((range) => rangeOverlapsDay(range, date));
     const ownedRanges = dayRanges.filter((range) => range.member_name === currentMemberName);
-    const otherRanges = dayRanges.filter((range) => range.member_name !== currentMemberName);
     const blocked = dayRanges.length > 0;
     const selected =
       dragStart && dragCurrent
@@ -181,7 +180,7 @@ export function AvailabilityCalendar({
       >
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <p className="truncate text-[9px] uppercase tracking-[0.08em] text-current/60 sm:text-xs sm:tracking-[0.25em]">{dayLabel(date)}</p>
+            <p className="hidden truncate text-xs uppercase tracking-[0.25em] text-current/60 lg:block">{dayLabel(date)}</p>
             <p className="mt-1 text-base font-semibold sm:mt-2 sm:text-lg">{format(date, 'd')}</p>
           </div>
           {isSameDay(date, today) ? (
@@ -194,18 +193,13 @@ export function AvailabilityCalendar({
         <div className="mt-2 flex flex-wrap gap-1 sm:mt-3">
           {blocked ? (
             <span className="max-w-full truncate rounded-full border border-white/10 bg-slate-950/30 px-1.5 py-1 text-[9px] font-semibold uppercase tracking-[0.08em] sm:px-2 sm:text-[10px] sm:tracking-[0.2em]">
-              {ownedRanges.length > 0 ? 'Your busy' : 'Busy'}
+              Busy
             </span>
           ) : (
             <span className="max-w-full truncate rounded-full border border-white/10 bg-slate-950/30 px-1.5 py-1 text-[9px] font-semibold uppercase tracking-[0.08em] sm:px-2 sm:text-[10px] sm:tracking-[0.2em]">
               Free
             </span>
           )}
-          {otherRanges.length > 0 ? (
-            <span className="max-w-full truncate rounded-full border border-white/10 bg-slate-950/30 px-1.5 py-1 text-[9px] font-semibold uppercase tracking-[0.08em] sm:px-2 sm:text-[10px] sm:tracking-[0.2em]">
-              {otherRanges.length} guest(s)
-            </span>
-          ) : null}
         </div>
       </button>
     );

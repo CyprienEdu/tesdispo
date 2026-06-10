@@ -73,6 +73,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'invalid_range' }, { status: 400 });
     }
 
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (new Date(startTs) < today) {
+      return NextResponse.json({ error: 'past_range' }, { status: 400 });
+    }
+
     const { supabase } = auth;
 
     if (scopeType === 'event') {

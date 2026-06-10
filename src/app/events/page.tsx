@@ -1,14 +1,15 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowRight, CalendarRange, CheckCircle2, Clock3, SquareStack } from 'lucide-react';
+import { ArrowRight, CalendarRange, CheckCircle2, Clock3, Plus, SquareStack, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { useAuth } from '@/components/auth-context';
 
 type EventItem = {
   id: string;
-  group_id: string;
+  group_id: string | null;
   group_name: string;
   name: string;
   owner_name: string;
@@ -38,10 +39,17 @@ function displayFor(name: string, displayNames: Record<string, string>) {
 }
 
 export default function EventsPage() {
+  const router = useRouter();
   const { apiFetch, email } = useAuth();
   const [items, setItems] = useState<EventItem[]>([]);
   const [displayNames, setDisplayNames] = useState<Record<string, string>>({});
   const [filter, setFilter] = useState<Filter>('all');
+  const [createOpen, setCreateOpen] = useState(false);
+  const [eventName, setEventName] = useState('');
+  const [eventMembers, setEventMembers] = useState('');
+  const [availabilityStart, setAvailabilityStart] = useState('');
+  const [availabilityEnd, setAvailabilityEnd] = useState('');
+  const [message, setMessage] = useState('');
 
   useEffect(() => {
     if (!email) return;
@@ -67,6 +75,29 @@ export default function EventsPage() {
       past: items.filter((item) => getEventFilter(item) === 'past').length
     };
   }, [items]);
+
+  async function createEvent() {
+    if (!email) return;
+
+    const response = await apiFetch('/api/events', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: eventName,
+        members: [email, ...eventMembers.split(',').map((value) => value.trim()).filter(Boolean)],
+        availability_start_ts: availabilityStart ? new Date(availabilityStart).toISOString() : null,
+        availability_end_ts: availabilityEnd ? new Date(availabilityEnd).toISOString() : null
+      })
+    });
+    const json = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      setMessage(json.error ?? "Impossible de creer l'evenement.");
+      return;
+    }
+
+    router.push(`/events/${json.data.id}`);
+  }
 
   return (
     <main className="mx-auto flex min-h-[calc(100vh-5rem)] max-w-7xl flex-col gap-6 px-4 py-10 sm:px-6 lg:px-8">
@@ -108,6 +139,14 @@ export default function EventsPage() {
             })}
           </div>
         </div>
+        <button
+          type="button"
+          onClick={() => setCreateOpen(true)}
+          className="inline-flex w-fit items-center gap-2 rounded-full bg-emerald-400 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-300"
+        >
+          <Plus className="h-4 w-4" />
+          Creer
+        </button>
       </section>
 
       <section className="rounded-[2rem] border border-white/10 bg-slate-950/60 p-6 shadow-2xl shadow-black/30 backdrop-blur-xl">
@@ -168,6 +207,56 @@ export default function EventsPage() {
           )}
         </div>
       </section>
+
+      {createOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-xl rounded-2xl border border-white/10 bg-slate-950 p-5 shadow-2xl">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-xl font-semibold text-white">Creer un evenement</h2>
+              <button type="button" onClick={() => setCreateOpen(false)} className="rounded-full border border-white/10 p-2 text-white">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="mt-4 space-y-3">
+              <input
+                className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-400 focus:border-emerald-300/60"
+                placeholder="Nom de l'evenement"
+                value={eventName}
+                onChange={(event) => setEventName(event.target.value)}
+              />
+              <input
+                className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-400 focus:border-emerald-300/60"
+                placeholder="Inviter (emails separes par des virgules)"
+                value={eventMembers}
+                onChange={(event) => setEventMembers(event.target.value)}
+              />
+              <div className="grid gap-3 sm:grid-cols-2">
+                <input
+                  className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none focus:border-emerald-300/60"
+                  type="datetime-local"
+                  value={availabilityStart}
+                  onChange={(event) => setAvailabilityStart(event.target.value)}
+                />
+                <input
+                  className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none focus:border-emerald-300/60"
+                  type="datetime-local"
+                  value={availabilityEnd}
+                  onChange={(event) => setAvailabilityEnd(event.target.value)}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={createEvent}
+                className="inline-flex items-center gap-2 rounded-full bg-emerald-400 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-300"
+              >
+                Creer
+                <ArrowRight className="h-4 w-4" />
+              </button>
+              {message ? <p className="text-sm text-rose-100">{message}</p> : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }

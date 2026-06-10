@@ -22,7 +22,7 @@ create table if not exists public.group_members (
 
 create table if not exists public.events (
   id uuid primary key default gen_random_uuid(),
-  group_id uuid not null references public.groups(id) on delete cascade,
+  group_id uuid references public.groups(id) on delete set null,
   name text not null,
   owner_name text not null,
   availability_start_ts timestamptz,

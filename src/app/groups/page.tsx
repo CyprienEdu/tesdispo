@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowRight, FolderOpen, Plus, Users } from 'lucide-react';
+import { ArrowRight, FolderOpen, Plus, Users, X } from 'lucide-react';
 
 import { useAuth } from '@/components/auth-context';
 
@@ -27,6 +27,7 @@ export default function GroupsPage() {
   const [displayNames, setDisplayNames] = useState<Record<string, string>>({});
   const [groupName, setGroupName] = useState('');
   const [inviteMembers, setInviteMembers] = useState('');
+  const [createOpen, setCreateOpen] = useState(false);
   const [message, setMessage] = useState('');
 
   const refresh = useCallback(async () => {
@@ -72,6 +73,7 @@ export default function GroupsPage() {
     setMessage('Groupe créé.');
     setGroupName('');
     setInviteMembers('');
+    setCreateOpen(false);
     await refresh();
   }
 
@@ -131,22 +133,10 @@ export default function GroupsPage() {
             </div>
           </div>
 
-          <div className="mt-5 space-y-3">
-            <input
-              className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-400 focus:border-emerald-300/60"
-              placeholder="Nom du groupe"
-              value={groupName}
-              onChange={(event) => setGroupName(event.target.value)}
-            />
-            <input
-              className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-400 focus:border-emerald-300/60"
-              placeholder="Inviter (emails séparés par des virgules)"
-              value={inviteMembers}
-              onChange={(event) => setInviteMembers(event.target.value)}
-            />
+          <div className="mt-5">
             <button
               type="button"
-              onClick={createGroup}
+              onClick={() => setCreateOpen(true)}
               className="inline-flex items-center gap-2 rounded-full bg-emerald-400 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-300"
             >
               Créer le groupe
@@ -194,6 +184,41 @@ export default function GroupsPage() {
           )}
         </div>
       </section>
+
+      {createOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-xl rounded-2xl border border-white/10 bg-slate-950 p-5 shadow-2xl">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-xl font-semibold text-white">Creer un groupe</h2>
+              <button type="button" onClick={() => setCreateOpen(false)} className="rounded-full border border-white/10 p-2 text-white">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="mt-4 space-y-3">
+              <input
+                className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-400 focus:border-emerald-300/60"
+                placeholder="Nom du groupe"
+                value={groupName}
+                onChange={(event) => setGroupName(event.target.value)}
+              />
+              <input
+                className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-400 focus:border-emerald-300/60"
+                placeholder="Inviter (emails separes par des virgules)"
+                value={inviteMembers}
+                onChange={(event) => setInviteMembers(event.target.value)}
+              />
+              <button
+                type="button"
+                onClick={createGroup}
+                className="inline-flex items-center gap-2 rounded-full bg-emerald-400 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-300"
+              >
+                Creer
+                <ArrowRight className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }
